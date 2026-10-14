@@ -55,13 +55,14 @@
 <section id="story">
   <div class="wrap">
     <div class="eyebrow reveal">Watch it work</div>
-    <h2 class="reveal">One fleet, four views.</h2>
+    <h2 class="reveal">One fleet, five views.</h2>
     <div class="story" id="story-root">
       <div class="story-steps">
         <article class="step" data-step="0"><h3>Every Mac, counted.</h3><p>GPU cores and measured busy percentage straight from macOS, memory reservations by job, and the scheduler's reasoning as it happens.</p></article>
         <article class="step" data-step="1"><h3>Models, measured.</h3><p>Onboard from Hugging Face with a size cap and SHA-256, then benchmark and evaluate on any Mac. Throughput is shown against your fastest model.</p></article>
         <article class="step" data-step="2"><h3>Fine-tune with the loss in view.</h3><p>MLX LoRA runs report train and validation loss as they go; the best checkpoint is marked, and the adapter keeps its lineage.</p></article>
-        <article class="step" data-step="3"><h3>Owners stay in control.</h3><p>Each Mac chooses when it may run fleet work: always, only when its owner is away, or paused, with battery and call guards.</p></article>
+        <article class="step" data-step="3"><h3>Sweep a grid, keep the best.</h3><p>One fine-tune fans out over learning rates, LoRA layers and batch sizes as ordinary queued jobs, so quotas and owner policy still apply. Runs are ranked by validation loss and the best adapter is marked.</p></article>
+        <article class="step" data-step="4"><h3>Owners stay in control.</h3><p>Each Mac chooses when it may run fleet work: always, only when its owner is away, or paused, with battery and call guards.</p></article>
       </div>
       <div class="story-stage" aria-hidden="true">
         <div class="window">
@@ -70,7 +71,8 @@
             <picture class="shot on" data-step="0"><img class="light" src="img/live-light.jpg" alt="" width="1440" height="900"><img class="dark" src="img/live-dark.jpg" alt="" width="1440" height="900"></picture>
             <picture class="shot" data-step="1"><img class="light" src="img/models-light.jpg" alt="" width="1440" height="900"><img class="dark" src="img/models-dark.jpg" alt="" width="1440" height="900"></picture>
             <picture class="shot" data-step="2"><img class="light" src="img/training-light.jpg" alt="" width="1440" height="900"><img class="dark" src="img/training-dark.jpg" alt="" width="1440" height="900"></picture>
-            <picture class="shot" data-step="3"><img class="light" src="img/fleet-light.jpg" alt="" width="1440" height="900"><img class="dark" src="img/fleet-dark.jpg" alt="" width="1440" height="900"></picture>
+            <picture class="shot" data-step="3"><img class="light" src="img/sweep-light.jpg" alt="" width="1440" height="900"><img class="dark" src="img/sweep-dark.jpg" alt="" width="1440" height="900"></picture>
+            <picture class="shot" data-step="4"><img class="light" src="img/fleet-light.jpg" alt="" width="1440" height="900"><img class="dark" src="img/fleet-dark.jpg" alt="" width="1440" height="900"></picture>
           </div>
         </div>
       </div>
@@ -289,12 +291,14 @@ python3 mcp/gryvia_mcp.py
         <figure><img loading="lazy" src="img/live-light.jpg" alt="Live view, light" width="1440" height="900"><figcaption>Live: GPU cores, reservations and the scheduling flow</figcaption></figure>
         <figure><img loading="lazy" src="img/models-light.jpg" alt="Model hub, light" width="1440" height="900"><figcaption>Model hub: status, throughput, evaluations, provenance</figcaption></figure>
         <figure><img loading="lazy" src="img/training-light.jpg" alt="Training with loss chart, light" width="1440" height="900"><figcaption>Training: live loss chart and runs</figcaption></figure>
+        <figure><img loading="lazy" src="img/sweep-light.jpg" alt="Hyperparameter sweep ranked by validation loss, light" width="1440" height="900"><figcaption>Sweep: a grid of fine-tunes ranked by validation loss</figcaption></figure>
         <figure><img loading="lazy" src="img/fleet-light.jpg" alt="Fleet with owner policy, light" width="1440" height="900"><figcaption>Fleet: owner policy and whether each Mac is accepting work</figcaption></figure>
       </div>
       <div class="shots" data-variant="dark" hidden>
         <figure><img loading="lazy" src="img/live-dark.jpg" alt="Live view, dark" width="1440" height="900"><figcaption>Live</figcaption></figure>
         <figure><img loading="lazy" src="img/models-dark.jpg" alt="Model hub, dark" width="1440" height="900"><figcaption>Model hub</figcaption></figure>
         <figure><img loading="lazy" src="img/training-dark.jpg" alt="Training, dark" width="1440" height="900"><figcaption>Training</figcaption></figure>
+        <figure><img loading="lazy" src="img/sweep-dark.jpg" alt="Sweep, dark" width="1440" height="900"><figcaption>Sweep</figcaption></figure>
         <figure><img loading="lazy" src="img/fleet-dark.jpg" alt="Fleet, dark" width="1440" height="900"><figcaption>Fleet</figcaption></figure>
       </div>
     </div>
