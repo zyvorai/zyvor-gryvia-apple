@@ -27,6 +27,16 @@ await page.fill('#filter','tiny-q4');await page.waitForFunction(()=>document.que
 await page.click('[data-view="datasets"]');await page.waitForSelector('#dataset-list td');if(!(await page.textContent('#dataset-list')).includes('toy'))throw Error('dataset missing');
 await page.click('[data-view="training"]');await page.fill('#train-form [name="base"]','mlx-community/tiny-test');await page.fill('#train-form [name="iters"]','10');await page.click('#train-form button.primary');
 await page.waitForSelector('#train-chart-panel:not([hidden])');await page.waitForFunction(()=>document.querySelector('#train-runs').textContent.includes('mlx-community'));
+// sweep: 2 learning rates x 2 layer counts = 4 queued runs, estimate and ranking table
+await page.fill('#sweep-form [name="base"]','mlx-community/tiny-test');await page.fill('#sweep-form [name="iters"]','5');
+await page.fill('#sweep-form [name="lr"]','1e-5, 3e-5');await page.fill('#sweep-form [name="layers"]','4, 8');
+if(!(await page.textContent('#sweep-estimate')).startsWith('4 runs'))throw Error('sweep estimate wrong: '+await page.textContent('#sweep-estimate'));
+await page.fill('#sweep-form [name="layers"]','1,2,3,4,5');if(!(await page.textContent('#sweep-estimate')).includes('limited'))throw Error('sweep cap not shown');
+await page.fill('#sweep-form [name="layers"]','4, 8');
+await page.click('#sweep-form button.primary');
+await page.waitForFunction(()=>document.querySelectorAll('#sweep-results tbody tr, #sweep-results table tr').length>=5);
+if((await page.locator('#sweep-results table tr').count())!==5)throw Error('expected header plus 4 sweep runs');
+
 await page.click('[data-view="workflows"]');await page.fill('#workflow-form [name="id"]','wf-model');await page.fill('#workflow-form [name="repo"]','owner/name');await page.fill('#workflow-form [name="file"]','m.gguf');await page.click('#workflow-form button.primary');
 await page.waitForFunction(()=>document.querySelector('#workflow-list').textContent.includes('download'));
 await page.click('[data-view="deployments"]');await page.waitForSelector('#deploy-list [data-deploy="tiny-q4"]');await page.click('[data-deploy="tiny-q4"]');

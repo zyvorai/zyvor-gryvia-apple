@@ -89,6 +89,9 @@ class API(BaseHTTPRequestHandler):
                 if role!='admin': raise Problem('forbidden',403)
                 from urllib.parse import parse_qs
                 return self.send(200,store.attestations(parse_qs(urlsplit(self.path).query).get('job',[None])[0]))
+            if not write and path.startswith('/api/sweeps/'):
+                if role=='agent': raise Problem('forbidden',403)
+                return self.send(200,store.sweep_status(path.split('/')[3],actor.get('tenant') if role=='tenant' else None))
             if not write and path=='/api/suites':
                 if role=='agent': raise Problem('forbidden',403)
                 return self.send(200,store.suites())
@@ -138,6 +141,12 @@ class API(BaseHTTPRequestHandler):
             elif path=='/api/workflows/cancel':
                 if role not in ['admin','tenant']: raise Problem('forbidden',403)
                 store.cancel_workflow(b['id'],actor.get('tenant') if role=='tenant' else None)
+            elif path=='/api/sweeps':
+                if role not in ['admin','tenant']: raise Problem('forbidden',403)
+                return self.send(201,{'id':store.sweep(actor['tenant'] if role=='tenant' else b.pop('tenant','default'),b)})
+            elif path=='/api/sweeps/cancel':
+                if role not in ['admin','tenant']: raise Problem('forbidden',403)
+                store.cancel_sweep(b['id'],actor.get('tenant') if role=='tenant' else None)
             elif path=='/api/suites':
                 if role!='admin': raise Problem('forbidden',403)
                 store.suite(b['id'],b['cases'])

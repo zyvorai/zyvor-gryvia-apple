@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BUSL-1.1
 # Copyright © 2026 Zyvor AI Labs Private Limited
 """Durable admission scheduler. All decisions and reservations share one SQLite transaction."""
-import hashlib, json, sqlite3, time, uuid, threading, math
+import hashlib, json, re, sqlite3, time, uuid, threading, math
 from server import ed25519
 
 RUNTIMES=['demo','mlx','llama','mps','coreml','download','bench','evaluate','quantize','train','serve','fuse']
@@ -72,6 +72,7 @@ class Store:
         CREATE TABLE IF NOT EXISTS run_metrics(job TEXT, step INTEGER, key TEXT, value REAL, at REAL);
         CREATE INDEX IF NOT EXISTS run_metrics_job ON run_metrics(job, key, step);
         CREATE TABLE IF NOT EXISTS workflows(id TEXT PRIMARY KEY, body TEXT NOT NULL, at REAL);
+        CREATE TABLE IF NOT EXISTS sweeps(id TEXT PRIMARY KEY, body TEXT NOT NULL, at REAL);
         CREATE TABLE IF NOT EXISTS results(id INTEGER PRIMARY KEY AUTOINCREMENT, at REAL, job TEXT, model TEXT, kind TEXT, node TEXT, body TEXT);
         CREATE INDEX IF NOT EXISTS results_model ON results(model, kind, at);
         CREATE TABLE IF NOT EXISTS suites(id TEXT PRIMARY KEY, body TEXT NOT NULL, at REAL);
@@ -553,6 +554,93 @@ class Store:
         for s in w['steps']:
             try: self.cancel(s['job'],tenant)
             except Problem: pass
+    SWEEP_AXES={'lr':(float,1e-9,1.0),'layers':(int,-1,64),'batch':(int,1,32)}
+    def sweep(self,tenant,body):
+        """Fan one fine-tune out over a small hyperparameter grid. Every run is an ordinary queued training job, so quotas,
+        policy and admission apply unchanged; runs on one Mac simply execute one after another."""
+        if not isinstance(body,dict): raise Problem('object required')
+        base=body.get('base'); dataset=body.get('datasetId'); grid=body.get('grid')
+        if not isinstance(base,str) or not 0<len(base)<=256: raise Problem('invalid base')
+        if not isinstance(dataset,str) or not 0<len(dataset)<=128: raise Problem('invalid datasetId')
+        if not isinstance(grid,dict) or not grid or set(grid)-set(self.SWEEP_AXES): raise Problem('grid axes must be among lr, layers, batch')
+        axes={}
+        for k,(typ,lo,hi) in self.SWEEP_AXES.items():
+            vals=grid.get(k)
+            if vals is None: continue
+            if not isinstance(vals,list) or not 1<=len(vals)<=4: raise Problem(f'grid {k} needs 1..4 values')
+            out=[]
+            for v in vals:
+                if isinstance(v,bool) or not isinstance(v,(int,float)) or (typ is int and int(v)!=v): raise Problem(f'invalid {k} value')
+                v=typ(v)
+                if not lo<=v<=hi: raise Problem(f'{k} out of range')
+                if v not in out: out.append(v)
+            axes[k]=out
+        total=1
+        for v in axes.values(): total*=len(v)
+        if total>12: raise Problem('a sweep is limited to 12 runs')
+        iters=body.get('iters',100)
+        if type(iters) is not int or not 1<=iters<=5000: raise Problem('invalid iters')
+        positive(body.get('memoryGiB'),'memoryGiB')
+        name=str(body.get('name') or 'sweep')[:60]
+        if not self.db.execute('SELECT 1 FROM tenants WHERE id=?',(tenant,)).fetchone(): raise Problem('unknown tenant')
+        mid=re.sub(r'[^A-Za-z0-9._-]+','__',base)
+        if not self.db.execute('SELECT 1 FROM models WHERE id=?',(mid,)).fetchone(): raise Problem('base model %s is not registered'%mid)
+        combos=[{}]
+        for k,vals in axes.items(): combos=[dict(c,**{k:v}) for c in combos for v in vals]
+        defaults={'lr':1e-5,'layers':8,'batch':2}; runs=[]; made=[]
+        try:
+            for i,c in enumerate(combos):
+                p=dict(defaults,**c)
+                spec=dict(runtime='train',kind='train',modelId=mid,datasetId=dataset,model=f'train {mid}',memoryGiB=body['memoryGiB'],priority=body.get('priority',55),mode='exclusive',retries=0,
+                          timeoutSeconds=21600,labels=['train','sweep:'+name[:30]],
+                          args=['--model',base,'--data','{{dataset.path}}','--iters',str(iters),'--batch-size',str(p['batch']),'--num-layers',str(p['layers']),'--learning-rate',repr(p['lr'])])
+                if body.get('node'): spec['node']=body['node']
+                jid=self.submit(tenant,spec); made.append(jid); runs.append(dict(job=jid,params=p))
+        except Problem:
+            for j in made:
+                try: self.cancel(j,tenant)
+                except Problem: pass
+            raise
+        sid=uuid.uuid4().hex[:12]
+        self.tx(lambda:self.db.execute('INSERT INTO sweeps VALUES(?,?,?)',(sid,json.dumps(dict(name=name,tenant=tenant,base=base,modelId=mid,datasetId=dataset,iters=iters,memoryGiB=body['memoryGiB'],grid=axes,runs=runs)),self.clock())))
+        self.event('sweep.created',sid,f'{len(runs)} runs')
+        return sid
+    def sweep_status(self,sid,tenant=None):
+        """Runs ranked by final validation loss (runs without one last), best first. Loss comes from the adapter a run produced,
+        or from the latest reported value while it is still training."""
+        with self.lock:
+            row=self.db.execute('SELECT body FROM sweeps WHERE id=?',(sid,)).fetchone()
+            if not row: raise Problem('sweep not found',404)
+            w=json.loads(row['body'])
+            if tenant and tenant!=w['tenant']: raise Problem('sweep not found',404)
+            adapters={}
+            for m in self.db.execute('SELECT id,body FROM models'):
+                b=json.loads(m['body'])
+                if b.get('kind')=='lora-adapter' and b.get('trainJob'): adapters[b['trainJob']]=dict(id=m['id'],**b)
+            rows=[]
+            for r in w['runs']:
+                j=self.db.execute('SELECT state FROM jobs WHERE id=?',(r['job'],)).fetchone()
+                m=self.run_metrics(r['job']); a=adapters.get(r['job'])
+                val=a.get('finalValLoss') if a else None
+                if val is None and m.get('valLoss'): val=m['valLoss'][-1][1]
+                train=a.get('finalTrainLoss') if a else None
+                if train is None and m.get('trainLoss'): train=m['trainLoss'][-1][1]
+                rows.append(dict(job=r['job'],params=r['params'],state=j['state'] if j else 'missing',valLoss=val,trainLoss=train,adapter=a['id'] if a else None,
+                                 tokensPerSecond=(m.get('tokensPerSec') or [[0,None]])[-1][1],peakGB=(m.get('peakGB') or [[0,None]])[-1][1]))
+            rows.sort(key=lambda x:(x['valLoss'] is None,x['valLoss'] if x['valLoss'] is not None else 0))
+            done=[x for x in rows if x['state']=='succeeded' and x['valLoss'] is not None]
+            best=min(done,key=lambda x:x['valLoss'])['job'] if done else None
+            for x in rows: x['best']=x['job']==best
+            return dict(id=sid,name=w['name'],tenant=w['tenant'],base=w['base'],datasetId=w['datasetId'],iters=w['iters'],grid=w['grid'],runs=rows,best=best,
+                        complete=all(x['state'] in ('succeeded','failed','cancelled') for x in rows))
+    def cancel_sweep(self,sid,tenant=None):
+        row=self.db.execute('SELECT body FROM sweeps WHERE id=?',(sid,)).fetchone()
+        if not row: raise Problem('sweep not found',404)
+        w=json.loads(row['body'])
+        if tenant and tenant!=w['tenant']: raise Problem('sweep not found',404)
+        for r in w['runs']:
+            try: self.cancel(r['job'],tenant)
+            except Problem: pass
     def suite(self,ident,cases):
         if not isinstance(ident,str) or not 0<len(ident)<=80: raise Problem('invalid suite id')
         if not isinstance(cases,list) or not 1<=len(cases)<=200: raise Problem('suite needs 1..200 cases')
@@ -614,5 +702,5 @@ class Store:
                 j=dict(row)
                 if tenant and j['tenant']!=tenant: continue
                 j['spec']=json.loads(j.pop('body')); j['result']=json.loads(j['result']); j.pop('lease'); jobs.append(j)
-            return {'jobs':jobs,'nodes':[] if tenant else [dict(id=r['id'],seen=r['seen'],drain=bool(r['drain']),online=self.clock()-r['seen']<=30,policy=self.node_policy(r['id']),gate=dict(zip(('allowed','reason'),policy_gate(self.node_policy(r['id']),json.loads(r['body']).get('presence')))),**json.loads(r['body'])) for r in self.db.execute('SELECT * FROM nodes')], 'tenants':[dict(r) for r in self.db.execute('SELECT * FROM tenants') if not tenant or r['id']==tenant], 'models':[dict(id=r['id'],**json.loads(r['body'])) for r in self.db.execute('SELECT * FROM models') if not tenant or not json.loads(r['body']).get('tenants') or tenant in json.loads(r['body'])['tenants']], 'events':[dict(r) for r in self.db.execute('SELECT * FROM events ORDER BY seq DESC LIMIT 100')] if not tenant else [], 'usage':[dict(r,kWh=round((r['joules'] or 0)/3.6e6,6)) for r in self.db.execute('SELECT tenant,SUM(seconds) AS workerSeconds,SUM(gibSeconds) AS reservedGiBSeconds,SUM(joules) AS joules FROM usage GROUP BY tenant') if not tenant or r['tenant']==tenant], 'decisions':[] if tenant else self.recent_decisions(40),'datasets':[dict(id=r['id'],**json.loads(r['body'])) for r in self.db.execute('SELECT * FROM datasets')],'workflows':[dict(id=r['id'],at=r['at'],**json.loads(r['body'])) for r in self.db.execute('SELECT * FROM workflows ORDER BY at DESC LIMIT 50') if not tenant or json.loads(r['body'])['tenant']==tenant],'time':self.clock()}
+            return {'jobs':jobs,'nodes':[] if tenant else [dict(id=r['id'],seen=r['seen'],drain=bool(r['drain']),online=self.clock()-r['seen']<=30,policy=self.node_policy(r['id']),gate=dict(zip(('allowed','reason'),policy_gate(self.node_policy(r['id']),json.loads(r['body']).get('presence')))),**json.loads(r['body'])) for r in self.db.execute('SELECT * FROM nodes')], 'tenants':[dict(r) for r in self.db.execute('SELECT * FROM tenants') if not tenant or r['id']==tenant], 'models':[dict(id=r['id'],**json.loads(r['body'])) for r in self.db.execute('SELECT * FROM models') if not tenant or not json.loads(r['body']).get('tenants') or tenant in json.loads(r['body'])['tenants']], 'events':[dict(r) for r in self.db.execute('SELECT * FROM events ORDER BY seq DESC LIMIT 100')] if not tenant else [], 'usage':[dict(r,kWh=round((r['joules'] or 0)/3.6e6,6)) for r in self.db.execute('SELECT tenant,SUM(seconds) AS workerSeconds,SUM(gibSeconds) AS reservedGiBSeconds,SUM(joules) AS joules FROM usage GROUP BY tenant') if not tenant or r['tenant']==tenant], 'decisions':[] if tenant else self.recent_decisions(40),'datasets':[dict(id=r['id'],**json.loads(r['body'])) for r in self.db.execute('SELECT * FROM datasets')],'workflows':[dict(id=r['id'],at=r['at'],**json.loads(r['body'])) for r in self.db.execute('SELECT * FROM workflows ORDER BY at DESC LIMIT 50') if not tenant or json.loads(r['body'])['tenant']==tenant],'sweeps':[dict(id=r['id'],at=r['at'],**json.loads(r['body'])) for r in self.db.execute('SELECT * FROM sweeps ORDER BY at DESC LIMIT 20') if not tenant or json.loads(r['body'])['tenant']==tenant],'time':self.clock()}
         return self.tx(run)

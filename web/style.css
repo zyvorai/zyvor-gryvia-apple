@@ -341,3 +341,9 @@ header .eyebrow { display: none; }
 @media (max-width: 1180px) { .form-grid.compact { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 720px) { .form-grid.compact { grid-template-columns: 1fr; } }
 .form-grid.compact .span2 { grid-column: span 2; }
+
+/* sweeps */
+.swbar { display: inline-block; width: 70px; height: 6px; border-radius: 3px; background: var(--fill); vertical-align: middle; margin-left: 6px; overflow: hidden; }
+.swbar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent-2), var(--accent-color)); }
+tr.best td { background: color-mix(in srgb, var(--status-succeeded) 8%, transparent); }
+#sweep-results .section-head { margin: 12px 0 6px; }

@@ -61,6 +61,19 @@ class McpTests(unittest.TestCase):
         self.assertIn("paused", pol["result"]["content"][0]["text"])
         self.assertEqual(self.store.node_policy("mac")["mode"], "paused")
 
+    def test_sweep_create_requires_write_then_listing_and_status(self):
+        self.store.model("org__base", dict(memoryGiB=4, runtime="mlx", status="ready", path="/m"))
+        args = {"base": "org/base", "datasetId": "d", "memoryGiB": 4, "iters": 5, "grid": {"lr": [1e-5, 2e-5]}}
+        ro = m.Server(self.base, TOKEN)
+        r = self.rpc(ro, "tools/call", {"name": "gryvia_create_sweep", "arguments": args})
+        self.assertIn("error", r)
+        srv = m.Server(self.base, TOKEN, allow_write=True)
+        made = json.loads(self.rpc(srv, "tools/call", {"name": "gryvia_create_sweep", "arguments": args})["result"]["content"][0]["text"])
+        listed = json.loads(self.rpc(ro, "tools/call", {"name": "gryvia_sweeps", "arguments": {}})["result"]["content"][0]["text"])
+        self.assertEqual((listed[0]["id"], len(listed[0]["runs"])), (made["id"], 2))
+        st = json.loads(self.rpc(ro, "tools/call", {"name": "gryvia_sweep", "arguments": {"id": made["id"]}})["result"]["content"][0]["text"])
+        self.assertEqual((len(st["runs"]), st["complete"]), (2, False))
+
     def test_argument_validation(self):
         srv = m.Server(self.base, TOKEN, allow_write=True)
         for name, args in [("gryvia_jobs", {"state": "nope"}), ("gryvia_jobs", {"limit": True}), ("gryvia_cancel_job", {}),
