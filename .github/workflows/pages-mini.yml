@@ -1,0 +1,33 @@
+# Deploys the site from a self-hosted runner (label gryvia-pages) while GitHub-hosted runners are unavailable.
+# Only runs on pushes to main and manual dispatch, never on pull requests, so outside contributors cannot run code on it.
+name: pages-self-hosted
+on:
+  push:
+    branches: [main]
+    paths: ['site/**', 'web/**', 'brand/**', 'scripts/build-site.sh', '.github/workflows/pages-mini.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages-self-hosted
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: [self-hosted, macOS, ARM64, gryvia-pages]
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/build-site.sh
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: _site }
+  deploy:
+    needs: build
+    runs-on: [self-hosted, macOS, ARM64, gryvia-pages]
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
