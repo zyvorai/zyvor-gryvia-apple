@@ -175,7 +175,7 @@ except OSError:
     pass
 LICENSE_LINE = "Gryvia Apple " + VERSION + " · BUSL-1.1 · Copyright © 2026 Zyvor AI Labs Private Limited"
 ZSH_COMPLETION = """#compdef gryvia.py gryvia
-_arguments '--server=[server origin]' '--json[raw JSON output]' '--output=[table|json|csv]' '1:command:(status top nodes policy jobs models provenance rekey fuse datasets dataset-add train metrics-run deploy undeploy onboard bench eval results submit cancel priority logs drain tenant metrics quickstart doctor completion)'
+_arguments '--server=[server origin]' '--json[raw JSON output]' '--output=[table|json|csv]' '1:command:(status top nodes policy jobs models provenance rekey fuse datasets dataset-add train sweep sweep-status sweep-cancel metrics-run deploy undeploy onboard bench eval results submit cancel priority logs drain tenant metrics quickstart doctor completion)'
 """
 
 
@@ -255,6 +255,11 @@ def build_parser():
     s = sub.add_parser("train", help="start a LoRA fine-tune (MLX)"); s.add_argument("base", help="MLX model repo id or local path"); s.add_argument("--dataset", required=True)
     s.add_argument("--iters", type=int, default=100); s.add_argument("--batch-size", type=int, default=2); s.add_argument("--layers", type=int, default=8); s.add_argument("--lr", type=float, default=1e-5); s.add_argument("--memory-gib", type=float, default=6)
     s = sub.add_parser("metrics-run", help="print loss history of a training run"); s.add_argument("job")
+    s = sub.add_parser("sweep", help="fan one fine-tune out over a small grid (max 12 runs); runs on one Mac go one after another"); s.add_argument("base", help="MLX model repo id or local path"); s.add_argument("--dataset", required=True)
+    s.add_argument("--lr", default="1e-5", help="comma-separated learning rates"); s.add_argument("--layers", default="8", help="comma-separated LoRA layer counts"); s.add_argument("--batch-size", default="2", help="comma-separated batch sizes")
+    s.add_argument("--iters", type=int, default=100); s.add_argument("--memory-gib", type=float, default=6); s.add_argument("--name", default="sweep")
+    s = sub.add_parser("sweep-status", help="rank the runs of a sweep by validation loss"); s.add_argument("id", nargs="?", help="sweep id (default: newest)")
+    s = sub.add_parser("sweep-cancel", help="cancel every unfinished run of a sweep"); s.add_argument("id")
     s = sub.add_parser("deploy", help="serve a ready GGUF model with llama-server"); s.add_argument("model")
     s = sub.add_parser("undeploy", help="stop a deployment"); s.add_argument("model")
     s = sub.add_parser("provenance", help="show the signed provenance chain of a model"); s.add_argument("model")
@@ -357,6 +362,38 @@ def run(args) -> int:
             spec["node"] = ds["node"]
         emit(c.call("jobs", spec), args, lambda j: f'training queued: job {j["id"][:10]}. Loss: gryvia.py metrics-run {j["id"]}')
         return 0
+    if args.op == "sweep":
+        def nums(text, typ):
+            try: return [typ(x) for x in text.split(",") if x.strip()]
+            except ValueError: raise CliError(f"invalid number list: {text}")
+        ds = next((d for d in c.call("state").get("datasets", []) if d["id"] == args.dataset and d.get("status") == "ready"), None)
+        if not ds:
+            raise CliError(f"dataset '{args.dataset}' is not ready (see: gryvia.py datasets)")
+        mid = "".join(ch if ch.isalnum() or ch in "._-" else "__" for ch in args.base)
+        if not any(m["id"] == mid for m in c.call("state")["models"]):
+            c.call("models", {"id": mid, "runtime": "mlx", "memoryGiB": args.memory_gib, "source": args.base, "status": "ready"})
+        body = {"name": args.name, "base": args.base, "datasetId": args.dataset, "iters": args.iters, "memoryGiB": args.memory_gib,
+                "grid": {"lr": nums(args.lr, float), "layers": nums(args.layers, int), "batch": nums(args.batch_size, int)}}
+        if ds.get("node"):
+            body["node"] = ds["node"]
+        emit(c.call("sweeps", body), args, lambda j: f'sweep queued: {j["id"]}. Results: gryvia.py sweep-status {j["id"]}')
+        return 0
+    if args.op == "sweep-status":
+        sid = args.id
+        if not sid:
+            sweeps = c.call("state").get("sweeps", [])
+            if not sweeps:
+                raise CliError("no sweeps yet (see: gryvia.py sweep --help)")
+            sid = sweeps[0]["id"]
+        st = c.call("sweeps/" + sid)
+        def pretty(st):
+            rows = [(("★ " if r["best"] else "  ") + r["job"][:8], r["state"], r["params"].get("lr"), r["params"].get("layers"), r["params"].get("batch"),
+                     f'{r["valLoss"]:.4f}' if r["valLoss"] is not None else "-", f'{r["trainLoss"]:.4f}' if r["trainLoss"] is not None else "-", r["adapter"] or "-") for r in st["runs"]]
+            return f'{st["name"]} · {st["base"]} · {"complete" if st["complete"] else "in progress"}\n' + table(["RUN", "STATE", "LR", "LAYERS", "BATCH", "VAL LOSS", "TRAIN LOSS", "ADAPTER"], rows, state_col=1)
+        emit(st, args, pretty)
+        return 0
+    if args.op == "sweep-cancel":
+        c.call("sweeps/cancel", {"id": args.id}); print("sweep cancelled"); return 0
     if args.op == "metrics-run":
         m = c.call("runs/" + args.job + "/metrics")
         steps = sorted({s for k in ("trainLoss", "valLoss") for s, _ in m.get(k, [])})

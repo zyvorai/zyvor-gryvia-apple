@@ -20,6 +20,7 @@
 | Allocation metering | Per-attempt worker seconds and reserved GiB-seconds | Unit test passes; not GPU-utilization billing |
 | Audit/logs | Durable events, bounded per-job logs, stale lease rejection | API tests pass; not a cryptographic audit ledger |
 | Deploy | launchd install/uninstall, Docker control plane, .app packaging, GitHub CI | Script syntax checks; actual macOS signing/install pending |
+| Hyperparameter sweeps | Grid of up to 12 LoRA fine-tunes submitted as ordinary jobs, ranked by validation loss; cancel as a group | Unit, API, CLI, MCP and browser tests pass; one real 4-run sweep on a Mac mini (see TEST_RESULTS); multi-Mac fan-out not run |
 | Independent multi-Mac jobs | Each registered Mac claims compatible jobs | Controller behavior tested; physical fleet run pending |
 | Shared hardware partitioning | No hard GPU percentages or MIG-style partitions | Not available in this project |
 | Distributed MLX gang jobs | Not implemented | Requires hardware qualification and coordinated launch |

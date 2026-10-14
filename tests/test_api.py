@@ -14,6 +14,18 @@ class APITests(unittest.TestCase):
         try:
             with urllib.request.urlopen(r) as res:return res.status,json.load(res)
         except urllib.error.HTTPError as e:return e.code,json.load(e)
+    def test_sweep_http_roles_and_isolation(self):
+        self.store.model('org__base',dict(memoryGiB=4,runtime='mlx',status='ready',path='/m'))
+        body=dict(name='s',base='org/base',datasetId='d',memoryGiB=4,iters=5,grid=dict(lr=[1e-5,2e-5]))
+        self.assertEqual(self.req('/api/sweeps','n'*32,body)[0],403)
+        status,j=self.req('/api/sweeps','t'*32,dict(body,tenant='default'));self.assertEqual(status,201)
+        sid=j['id'];self.assertEqual(self.store.snapshot()['sweeps'][0]['tenant'],'team')
+        status,st=self.req('/api/sweeps/'+sid,'t'*32);self.assertEqual((status,len(st['runs'])),(200,2))
+        self.assertEqual(self.req('/api/sweeps/'+sid,'n'*32)[0],403)
+        self.assertEqual(self.req('/api/sweeps/nope')[0],404)
+        self.assertEqual(self.req('/api/sweeps',body=dict(body,grid=dict(lr=[1,2,3,4,5])))[0],400)
+        self.assertEqual(self.req('/api/sweeps/cancel','t'*32,dict(id=sid))[0],200)
+        self.assertEqual({r['state'] for r in self.req('/api/sweeps/'+sid)[1]['runs']},{'cancelled'})
     def test_auth(self):self.assertEqual(self.req('/api/state','bad')[0],401)
     def test_role_enforcement(self):
         self.assertEqual(self.req('/api/tenants','t'*32,dict(id='hack',quota=4))[0],403)

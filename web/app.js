@@ -79,7 +79,7 @@ function startDemo() {
               {at: now - 480, job: 'd4', model: 'llama-3.1-8b-q5', kind: 'benchmark', node: 'studio-01', body: {success: true, promptTokensPerSecond: 240.9, generationTokensPerSecond: 19.6}},
               {at: now - 400, job: 'd1', model: 'llama-3.2-1b-q4', kind: 'benchmark', node: 'mini-01', body: {success: true, promptTokensPerSecond: 910.2, generationTokensPerSecond: 72.4}},
               {at: now - 300, job: 'd2', model: 'llama-3.2-1b-q4', kind: 'evaluate', node: 'mini-01', body: {success: true, passed: 4, total: 5, passRate: 0.8, cases: [{passed: true, prompt: 'What is 2+2?', output: '4'}, {passed: false, prompt: 'Capital of Peru?', output: 'Lima is'}]}}],
-    suites: {}, datasets: [{id: 'support-chats', status: 'ready', rows: 4200, bytes: 6.2e6, node: 'studio-01', source: 'datasets/acme/support/train.jsonl', path: '/demo/support.jsonl'}], workflows: [],
+    suites: {}, datasets: [{id: 'support-chats', status: 'ready', rows: 4200, bytes: 6.2e6, node: 'studio-01', source: 'datasets/acme/support/train.jsonl', path: '/demo/support.jsonl'}], workflows: [], sweeps: [],
     events: [{at: now - 60, kind: 'job.claimed', subject: 'demo1', detail: 'studio-01'}, {at: now - 600, kind: 'tenant.updated', subject: 'research', detail: ''}],
     usage: [{tenant: 'default', workerSeconds: 3120, reservedGiBSeconds: 12480}, {tenant: 'research', workerSeconds: 9100, reservedGiBSeconds: 120000}]};
   $('#demo-banner').hidden = false; $('#connect').hidden = true;
@@ -106,7 +106,33 @@ function demoApi(path, body) {
     if (arr.length > 90) arr.shift();
   });
   if (path === 'telemetry') return Promise.resolve(JSON.parse(JSON.stringify(d.telemetry)));
-  if (path === 'state') return Promise.resolve(JSON.parse(JSON.stringify({jobs: d.jobs, nodes: d.nodes, tenants: d.tenants, models: d.models, events: d.events, usage: d.usage, decisions: d.decisions, datasets: d.datasets, workflows: d.workflows, time: now})));
+  if (path === 'state') return Promise.resolve(JSON.parse(JSON.stringify({jobs: d.jobs, nodes: d.nodes, tenants: d.tenants, models: d.models, events: d.events, usage: d.usage, decisions: d.decisions, sweeps: d.sweeps, datasets: d.datasets, workflows: d.workflows, time: now})));
+  if (path === 'sweeps' && body) {
+    const grid = body.grid || {}, lr = grid.lr || [1e-5], layers = grid.layers || [8], batch = grid.batch || [2], runs = [];
+    for (const a of lr) for (const b of layers) for (const c of batch) {
+      const id = ('demosw' + Math.random().toString(16).slice(2)).padEnd(32, '0').slice(0, 32);
+      d.jobs.unshift({id, tenant: 'default', state: 'queued', created: now, started: null, node: null, attempt: 0, reason: 'waiting for a free Mac', spec: {runtime: 'train', kind: 'train', modelId: 'demo-base', datasetId: body.datasetId, model: 'train demo-base', memoryGiB: body.memoryGiB, labels: ['train', 'sweep:' + (body.name || 'sweep')], args: []}, result: {}});
+      runs.push({job: id, params: {lr: a, layers: b, batch: c}});
+    }
+    const id = 'demo-sw' + d.sweeps.length;
+    d.sweeps.unshift({id, name: body.name || 'sweep', tenant: 'default', base: body.base, datasetId: body.datasetId, iters: body.iters, grid, runs, at: now, simAt: Date.now()});
+    return Promise.resolve({id});
+  }
+  if (path.startsWith('sweeps/') && path !== 'sweeps/cancel') {
+    const w = d.sweeps.find(x => x.id === path.slice(7)); if (!w) return Promise.reject(new Error('sweep not found'));
+    const stepMs = 5000, elapsed = Date.now() - w.simAt;     // simulated: runs finish one after another
+    const rows = w.runs.map((r, i) => {
+      const done = elapsed >= (i + 1) * stepMs, running = !done && elapsed >= i * stepMs && !w.cancelled;
+      const val = 1.25 + 0.55 * Math.abs(Math.log10(r.params.lr) + 4.5) + 0.02 * Math.abs(r.params.layers - 10) + 0.03 * (r.params.batch > 4 ? 1 : 0);
+      const j = d.jobs.find(x => x.id === r.job); if (j && !w.cancelled) Object.assign(j, {state: done ? 'succeeded' : running ? 'running' : 'queued', node: done || running ? 'mini-01' : null});
+      return {job: r.job, params: r.params, state: w.cancelled ? 'cancelled' : done ? 'succeeded' : running ? 'running' : 'queued', valLoss: done ? val : running ? val + 0.9 * (1 - (elapsed - i * stepMs) / stepMs) : null, trainLoss: done ? val - 0.15 : null, adapter: done ? 'demo-base-lora-' + r.job.slice(0, 6) : null};
+    });
+    rows.sort((a, b) => (a.valLoss == null) - (b.valLoss == null) || a.valLoss - b.valLoss);
+    const ok = rows.filter(r => r.state === 'succeeded'), best = ok.length ? ok.reduce((m, r) => r.valLoss < m.valLoss ? r : m).job : null;
+    rows.forEach(r => { r.best = r.job === best; });
+    return Promise.resolve({id: w.id, name: w.name, base: w.base, datasetId: w.datasetId, iters: w.iters, grid: w.grid, runs: rows, best, complete: rows.every(r => ['succeeded', 'failed', 'cancelled'].includes(r.state))});
+  }
+  if (path === 'sweeps/cancel') { const w = d.sweeps.find(x => x.id === body.id); if (w) { w.cancelled = true; w.runs.forEach(r => { const j = d.jobs.find(x => x.id === r.job); if (j && j.state !== 'succeeded') j.state = 'cancelled'; }); } return Promise.resolve({}); }
   if (path === 'history') return Promise.resolve([]);
   if (path.startsWith('runs/')) {
     const steps = Array.from({length: 20}, (_, i) => (i + 1) * 5);
@@ -675,6 +701,8 @@ function renderBuild() {
   $('#dataset-node').innerHTML = nodeOptions('download'); $('#dataset-local-node').innerHTML = nodeOptions();
   $('#workflow-node').innerHTML = nodeOptions('download');
   $('#train-dataset').innerHTML = ds.filter(d => d.status === 'ready').map(d => `<option value="${esc(d.id)}">${esc(d.id)} (${d.rows ?? '?'} rows)</option>`).join('') || '<option value="">Add a dataset first</option>';
+  $('#sweep-dataset').innerHTML = $('#train-dataset').innerHTML;
+  renderSweep();
   $('#mlx-models').innerHTML = state.models.filter(m => m.runtime === 'mlx').map(m => `<option value="${esc(m.source || m.id)}">`).join('');
   // training runs
   const runs = state.jobs.filter(j => j.spec.kind === 'train');
@@ -721,6 +749,47 @@ function drawChart(m) {
     </svg></div>
     <div class="legend" style="display:flex;gap:18px;flex-wrap:wrap;margin-top:6px">${series.map(([k, l, c]) => `<span><i style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c};margin-right:6px"></i>${l}${m[k].length ? ' (last ' + m[k][m[k].length - 1][1].toFixed(3) + ')' : ''}</span>`).join('')}${m.tokensPerSec ? `<span class="muted">${m.tokensPerSec[m.tokensPerSec.length - 1][1].toFixed(0)} tok/s</span>` : ''}${m.peakGB ? `<span class="muted">peak ${m.peakGB[m.peakGB.length - 1][1].toFixed(1)} GB</span>` : ''}</div>`;
 }
+/* ---------- sweeps: one fine-tune fanned out over a small grid ---------- */
+let sweepView = null, sweepBusy = false;
+const parseList = (text, int) => String(text || '').split(/[,\s]+/).filter(Boolean).map(Number).filter(v => Number.isFinite(v) && (!int || Number.isInteger(v)));
+function sweepEstimate() {
+  const f = Object.fromEntries(new FormData($('#sweep-form'))), lr = parseList(f.lr), ly = parseList(f.layers, true), bs = parseList(f.batch, true);
+  const n = Math.max(lr.length, 1) * Math.max(ly.length, 1) * Math.max(bs.length, 1), bad = n > 12 || [lr, ly, bs].some(a => a.length > 4);
+  $('#sweep-estimate').textContent = bad ? `${n} runs: a sweep is limited to 12 runs and 4 values per axis.`
+    : `${n} run${n === 1 ? '' : 's'}, ${f.memoryGiB || '?'} GiB reserved each. Runs on one Mac go one after another; more Macs run them side by side if memory and owner policy allow.`;
+  return {n, bad, lr, ly, bs};
+}
+async function renderSweep() {
+  const sw = (state.sweeps || [])[0], box = $('#sweep-results');
+  sweepEstimate();
+  if (!sw) { box.innerHTML = emptyArt('chart', 'No sweeps yet', 'Compare learning rates, LoRA layers and batch sizes in one go.'); return; }
+  if (sweepBusy) return; sweepBusy = true;
+  try { sweepView = await api('sweeps/' + sw.id); } catch { sweepView = null; } finally { sweepBusy = false; }
+  const st = sweepView; if (!st) return;
+  const vals = st.runs.map(r => r.valLoss).filter(Number.isFinite), lo = Math.min(...vals), hi = Math.max(...vals);
+  const bar = v => Number.isFinite(v) ? `<span class="swbar"><i style="width:${(hi === lo ? 100 : 100 - (v - lo) / (hi - lo) * 70).toFixed(0)}%"></i></span>` : '';
+  box.innerHTML = `<div class="section-head"><strong>${esc(st.name)}</strong><span class="muted">${esc(st.base)} · ${st.runs.length} runs · ${st.complete ? 'complete' : 'in progress'}${st.complete ? '' : ` <button data-sweep-cancel="${esc(st.id)}">Cancel</button>`}</span></div>
+    <table><tr><th>Run</th><th>State</th><th>LR</th><th>Layers</th><th>Batch</th><th>Val loss</th><th>Train loss</th><th></th></tr>${st.runs.map(r => `<tr${r.best ? ' class="best"' : ''}>
+      <td><span class="num">${esc(r.job.slice(0, 8))}</span>${r.best ? ` <span class="label">${st.complete ? 'best' : 'best so far'}</span>` : ''}</td><td>${badge(r.state)}</td><td class="num">${esc(r.params.lr < 0.01 ? Number(r.params.lr).toExponential() : String(r.params.lr))}</td><td class="num">${esc(String(r.params.layers))}</td><td class="num">${esc(String(r.params.batch))}</td>
+      <td class="num">${Number.isFinite(r.valLoss) ? r.valLoss.toFixed(3) : '—'} ${bar(r.valLoss)}</td><td class="num">${Number.isFinite(r.trainLoss) ? r.trainLoss.toFixed(3) : '—'}</td>
+      <td><button data-chart="${esc(r.job)}">Loss chart</button>${r.adapter ? ` <button data-model="${esc(r.adapter)}">Open adapter</button>` : ''}</td></tr>`).join('')}</table>`;
+}
+$('#sweep-form').addEventListener('input', sweepEstimate);
+$('#sweep-form').onsubmit = async e => {
+  e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)), est = sweepEstimate();
+  const ds = (state.datasets || []).find(d => d.id === f.dataset);
+  if (!ds) return fail(Error('Pick a ready dataset first (Datasets).'));
+  if (est.bad || !est.lr.length || !est.ly.length || !est.bs.length) return fail(Error('Give 1 to 4 values per axis, at most 12 runs in total.'));
+  const id = f.base.replace(/[^A-Za-z0-9._-]+/g, '__');
+  try {
+    if (!state.models.some(m => m.id === id)) await api('models', {id, runtime: 'mlx', memoryGiB: Number(f.memoryGiB), source: f.base, status: 'ready', notes: 'base model for fine-tuning'});
+    await api('sweeps', {name: 'sweep ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}), base: f.base, datasetId: f.dataset, iters: Number(f.iters), memoryGiB: Number(f.memoryGiB),
+      grid: {lr: est.lr, layers: est.ly, batch: est.bs}, ...(ds.node ? {node: ds.node} : {})});
+    await refresh(); toast(`Sweep queued: ${est.n} runs`);
+  } catch (err) { fail(err); }
+};
+setInterval(() => { if (view === 'training' && !paused && sweepView && !sweepView.complete) renderSweep(); }, 3000);
+
 async function showChart(job) {
   chartJob = job; $('#train-chart-panel').hidden = false;
   $('#train-chart-title').textContent = 'Loss · ' + job.slice(0, 10);
@@ -988,6 +1057,7 @@ document.addEventListener('click', async e => {
     if (d.template !== undefined) { const t = prefs.templates[Number(d.template)]; fillForm(t.body); toast('Template applied'); }
     if (d.templateDel !== undefined) { prefs.templates.splice(Number(d.templateDel), 1); savePrefs(); renderTemplates(); }
     if (d.accent) { prefs.accent = d.accent; savePrefs(); }
+    if (d.sweepCancel) { try { await api('sweeps/cancel', {id: d.sweepCancel}); await refresh(); toast('Sweep cancelled'); } catch (err) { fail(err); } }
     if (d.policySet) { const n = state.nodes.find(x => x.id === d.policySet); await api('nodes/policy', {id: d.policySet, ...(n.policy || {}), mode: d.mode}); await refresh(); toast(`${d.policySet}: ${d.mode === 'idle' ? 'runs fleet work only when you are away' : d.mode === 'paused' ? 'fleet work paused' : 'runs fleet work any time'}`); }
     if (d.model) openModel(d.model);
     if (d.chart) { select('training'); showChart(d.chart); }

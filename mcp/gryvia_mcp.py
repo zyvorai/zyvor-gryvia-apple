@@ -56,6 +56,9 @@ READ_TOOLS = {
                        lambda a: "/api/results?" + _q(a, ("model", "kind"))),
     "gryvia_run_metrics": ("Loss / throughput history of a training job: key -> [[step, value], ...].", obj({"job": {"type": "string"}}, ["job"]),
                            lambda a: "/api/runs/" + urllib.parse.quote(str(a["job"]), safe="") + "/metrics"),
+    "gryvia_sweeps": ("Hyperparameter sweeps (fan-out fine-tunes): name, base model, dataset, grid and the job id of each run.", obj(), lambda a: "/api/state"),
+    "gryvia_sweep": ("Runs of one sweep ranked by validation loss, with state, losses, adapter id and the best run marked.", obj({"id": {"type": "string"}}, ["id"]),
+                     lambda a: "/api/sweeps/" + urllib.parse.quote(str(a["id"]), safe="")),
     "gryvia_decisions": ("The scheduler's recent decisions (queued, admitted, waiting + reason, yielded, finished).", obj(), lambda a: "/api/state"),
 }
 
@@ -69,6 +72,12 @@ WRITE_TOOLS = {
                           ("POST", lambda a: "/api/jobs", lambda a: {**a, "mode": "exclusive"})),
     "gryvia_run_demo_job": ("Run the built-in 3-second CPU smoke workload to check the fleet end to end.", obj(),
                             ("POST", lambda a: "/api/jobs", lambda a: {"runtime": "demo", "model": "mcp demo", "memoryGiB": 1, "args": ["--seconds", "3"], "mode": "exclusive", "labels": ["mcp"]})),
+    "gryvia_create_sweep": ("Queue a hyperparameter sweep: one fine-tune per combination of the grid (max 12 runs, each axis 1-4 values). Needs a registered MLX base model and a ready dataset.",
+                            obj({"name": {"type": "string"}, "base": {"type": "string"}, "datasetId": {"type": "string"}, "iters": num("integer", "1-5000", minimum=1, maximum=5000),
+                                 "memoryGiB": num(description="GiB to reserve per run"),
+                                 "grid": obj({"lr": {"type": "array", "items": {"type": "number"}, "maxItems": 4}, "layers": {"type": "array", "items": {"type": "integer"}, "maxItems": 4},
+                                              "batch": {"type": "array", "items": {"type": "integer"}, "maxItems": 4}})}, ["base", "datasetId", "memoryGiB", "grid"]),
+                            ("POST", lambda a: "/api/sweeps", lambda a: a)),
     "gryvia_cancel_job": ("Cancel a queued or running job.", obj({"id": {"type": "string"}}, ["id"]),
                           ("POST", lambda a: "/api/cancel", lambda a: {"id": a["id"]})),
     "gryvia_set_node_policy": ("Set when a Mac may run fleet work. mode: always, idle (only when the owner is away) or paused.",
@@ -155,6 +164,8 @@ class Server:
                         "tenants": data["tenants"]}
             elif name == "gryvia_models":
                 data = data["models"]
+            elif name == "gryvia_sweeps":
+                data = [{k: w.get(k) for k in ("id", "name", "base", "datasetId", "iters", "grid", "runs")} for w in data.get("sweeps", [])]
             elif name == "gryvia_decisions":
                 data = data.get("decisions", [])
         elif self.allow_write and name in WRITE_TOOLS:

@@ -122,6 +122,25 @@ class TrainCliTests(CliTests):
         self.assertTrue(any(m["id"] == "mlx-community__tiny" for m in self.store.snapshot()["models"]))
 
 
+class SweepCliTests(CliTests):
+    test_status_json_when_piped = test_doctor_reports_no_agents = test_bad_token_gives_hint = test_table_alignment = test_completion = None
+
+    def test_sweep_queues_grid_and_status_ranks(self):
+        code, _, err = self.run_cli("sweep", "mlx-community/tiny", "--dataset", "nope")
+        self.assertEqual(code, 1)
+        self.store.dataset("d", dict(path="/m/_datasets/d.jsonl", status="ready", rows=10, node="mini"))
+        code, out, _ = self.run_cli("sweep", "mlx-community/tiny", "--dataset", "d", "--lr", "1e-5,3e-5", "--layers", "4,8", "--iters", "5", "--name", "t")
+        self.assertEqual(code, 0, out)
+        trains = [j for j in self.store.snapshot()["jobs"] if j["spec"].get("kind") == "train"]
+        self.assertEqual(len(trains), 4)
+        code, out, _ = self.run_cli("sweep-status")
+        self.assertEqual(code, 0)
+        st = json.loads(out)
+        self.assertEqual((st["name"], len(st["runs"]), st["complete"]), ("t", 4, False))
+        code, _, err = self.run_cli("sweep", "mlx-community/tiny", "--dataset", "d", "--lr", "x")
+        self.assertEqual(code, 1)
+
+
 class PolicyCliTests(CliTests):
     test_status_json_when_piped = test_doctor_reports_no_agents = test_bad_token_gives_hint = test_table_alignment = test_completion = None
 

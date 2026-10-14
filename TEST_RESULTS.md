@@ -123,3 +123,11 @@ Data: 24 Gryvia facts × 5 question stems = 120 chat-format rows; held-out = the
 - Python suite 154 tests, Swift 19 XCTests, browser test (hero number, ring, segmented policy, chart hover tooltip, flow particles, reduced motion, 390 px layout) and `site-check` pass.
 - Screenshot matrix: light/dark × flat/glass × 1440/390 px for Live, Fleet, Timeline and Model hub, reviewed visually; no horizontal overflow in any of the 32 captures.
 - Not verified: Safari and Firefox rendering (Chromium only), the native SwiftUI app (unchanged), a long-running live fleet with the new idle sparkline (demo mode only).
+
+
+## Hyperparameter sweep (2026-10-15, Mac mini macOS 27.0, M6 / 12 GPU cores)
+- Control plane and native agent started from a working copy of this branch; MLX + mlx-lm installed into a fresh venv. `gryvia sweep mlx-community/SmolLM-135M-Instruct-4bit --dataset toy --lr 1e-5,1e-4 --layers 4,8 --iters 30 --memory-gib 2` queued 4 ordinary training jobs on a 48-row synthetic arithmetic dataset.
+- The Mac ran them one after another (exclusive reservations): starts at +0, +12, +16 and +21 s from submission (the first includes model load), all four succeeded.
+- Ranked by final validation loss: lr 1e-4 / 8 layers 0.609 (best), lr 1e-4 / 4 layers 0.618, lr 1e-5 / 8 layers 1.419, lr 1e-5 / 4 layers 2.112. Each run produced a registered LoRA adapter with signed provenance.
+- Caveats: a 135 M-parameter model on a toy dataset with 30 iterations, one seed per cell, so the ranking says the larger learning rate learns faster here, nothing about quality; the 0.609 vs 0.618 difference is within noise. The run used one Mac, so fan-out across several Macs is covered by unit tests only.
+- The mini was cleaned afterwards (processes stopped, venv and state removed).

@@ -46,6 +46,13 @@ for (const theme of ['light', 'dark']) {
   await page.evaluate(() => document.getElementById('train-chart-panel').scrollIntoView({ block: 'end' }));
   await page.evaluate(() => window.scrollBy(0, 24));
   await shot('training');
+  await page.fill('#sweep-form [name="base"]', 'mlx-community/Llama-3.2-1B-Instruct-4bit');
+  await page.fill('#sweep-form [name="lr"]', '5e-6, 1e-5, 5e-5'); await page.fill('#sweep-form [name="layers"]', '8, 16');
+  await page.click('#sweep-form button.primary');
+  await page.waitForSelector('#toasts .toast', { state: 'detached' });
+  await page.waitForFunction(() => (document.querySelector('#sweep-results')?.textContent.match(/succeeded/g) || []).length >= 3, null, { timeout: 40000 });
+  await page.evaluate(() => document.getElementById('sweep-panel').scrollIntoView({ block: 'center' }));
+  await shot('sweep');
   if (errors.length) throw new Error(errors.join('\n'));
   await ctx.close();
 }

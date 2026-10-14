@@ -268,6 +268,20 @@ gryvia.py drain MAC_ID               # stop new work on a Mac</pre>
       <p class="muted"><small>Training uses this Mac's single GPU; the run appears in Live and Workloads like any job. Loss charts update as MLX reports them.</small></p>
     </section>
     <section class="panel"><h3>Runs</h3><div id="train-runs"></div></section>
+    <section class="panel" id="sweep-panel"><h3>Sweep</h3>
+      <form id="sweep-form" class="form-grid compact">
+        <label class="span2">Base model (MLX repo or local path)<input name="base" list="mlx-models" required placeholder="mlx-community/SmolLM-135M-Instruct-4bit"></label>
+        <label>Dataset<select name="dataset" id="sweep-dataset"></select></label>
+        <label>Iterations<input name="iters" type="number" min="1" max="5000" value="100"></label>
+        <label>Learning rates<input name="lr" value="1e-5, 3e-5" aria-describedby="sweep-estimate"></label>
+        <label>LoRA layers<input name="layers" value="8, 16"></label>
+        <label>Batch sizes<input name="batch" value="2"></label>
+        <label>Memory per run (GiB)<input name="memoryGiB" type="number" min="1" step="0.5" value="6"></label>
+        <div class="form-action"><button class="primary">Start sweep</button></div>
+      </form>
+      <p class="muted"><small id="sweep-estimate"></small></p>
+      <div id="sweep-results"></div>
+    </section>
     <section class="panel" id="train-chart-panel" hidden><h3 id="train-chart-title">Loss</h3><div id="train-chart"></div></section>
   </section>
 
