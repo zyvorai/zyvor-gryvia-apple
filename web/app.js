@@ -703,7 +703,7 @@ function drawChart(m) {
   const series = [['trainLoss', 'Train loss', 'var(--accent-color)'], ['valLoss', 'Validation loss', 'var(--status-queued)']].filter(([k]) => (m[k] || []).length);
   if (!series.length) { $('#train-chart').innerHTML = emptyArt('chart', 'No loss reported yet', 'MLX prints the first line after the model loads.'); return; }
   const pts = series.flatMap(([k]) => m[k]), maxS = Math.max(...pts.map(p => p[0]), 1), maxV = Math.max(...pts.map(p => p[1])) * 1.05, minV = Math.min(0, Math.min(...pts.map(p => p[1])));
-  const W = 720, H = 260, L = 44, R = 16, T = 14, B = 30, X = s => L + s / maxS * (W - L - R), Y = v => T + (1 - (v - minV) / Math.max(maxV - minV, 1e-6)) * (H - T - B);
+  const W = 900, H = 240, L = 44, R = 16, T = 14, B = 30, X = s => L + s / maxS * (W - L - R), Y = v => T + (1 - (v - minV) / Math.max(maxV - minV, 1e-6)) * (H - T - B);
   const ticks = Array.from({length: 5}, (_, i) => minV + (maxV - minV) * i / 4);
   const gid = 'lg' + (++gradSeq);
   const train = (m.trainLoss || []).map(p => [X(p[0]), Y(p[1])]), val = (m.valLoss || []).map(p => [X(p[0]), Y(p[1])]);

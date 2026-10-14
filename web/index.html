@@ -255,8 +255,8 @@ gryvia.py drain MAC_ID               # stop new work on a Mac</pre>
   <section id="training" class="view hidden">
     <div class="section-head"><h2>Training</h2><span class="muted">LoRA fine-tuning on one Mac with MLX</span></div>
     <section class="panel"><h3>New fine-tune</h3>
-      <form id="train-form" class="form-grid">
-        <label>Base model (MLX repo or local path)<input name="base" list="mlx-models" required placeholder="mlx-community/SmolLM-135M-Instruct-4bit"><datalist id="mlx-models"></datalist></label>
+      <form id="train-form" class="form-grid compact">
+        <label class="span2">Base model (MLX repo or local path)<input name="base" list="mlx-models" required placeholder="mlx-community/SmolLM-135M-Instruct-4bit"><datalist id="mlx-models"></datalist></label>
         <label>Dataset<select name="dataset" id="train-dataset"></select></label>
         <label>Iterations<input name="iters" type="number" min="1" max="5000" value="100"></label>
         <label>Batch size<input name="batch" type="number" min="1" max="32" value="2"></label>
@@ -265,7 +265,7 @@ gryvia.py drain MAC_ID               # stop new work on a Mac</pre>
         <label>Memory to reserve (GiB)<input name="memoryGiB" type="number" min="1" step="0.5" value="6"></label>
         <div class="form-action"><button class="primary">Start training</button></div>
       </form>
-      <p>Training uses this Mac's single GPU; the run appears in Live and Workloads like any job. Loss charts update as MLX reports them.</p>
+      <p class="muted"><small>Training uses this Mac's single GPU; the run appears in Live and Workloads like any job. Loss charts update as MLX reports them.</small></p>
     </section>
     <section class="panel"><h3>Runs</h3><div id="train-runs"></div></section>
     <section class="panel" id="train-chart-panel" hidden><h3 id="train-chart-title">Loss</h3><div id="train-chart"></div></section>
