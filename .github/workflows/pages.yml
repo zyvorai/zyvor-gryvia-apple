@@ -1,8 +1,6 @@
 name: pages
+# Manual only: automatic deploys use pages-mini.yml (self-hosted) while hosted runners are unavailable.
 on:
-  push:
-    branches: [main]
-    paths: ['site/**', 'web/**', 'brand/**', 'scripts/build-site.sh', '.github/workflows/pages.yml']
   workflow_dispatch:
 permissions:
   contents: read
