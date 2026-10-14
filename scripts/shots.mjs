@@ -37,7 +37,14 @@ for (const theme of ['light', 'dark']) {
   await page.click('[data-view="training"]');
   await page.fill('#train-form [name="base"]', 'mlx-community/Llama-3.2-1B-Instruct-4bit');
   await page.click('#train-form button.primary');
-  await page.waitForSelector('#train-chart svg'); await page.locator('#train-chart-panel').scrollIntoViewIfNeeded(); await shot('training');
+  await page.waitForSelector('#toasts .toast', { state: 'detached' });   // the simulated run starts ~2.5 s after submit
+  await page.click('#refresh');
+  await page.waitForFunction(() => /running/i.test(document.querySelector('#train-runs')?.textContent || ''), null, { timeout: 8000 });
+  await page.click('#train-runs [data-chart]');
+  await page.waitForSelector('#train-chart svg');
+  await page.evaluate(() => document.getElementById('train-chart-panel').scrollIntoView({ block: 'end' }));
+  await page.evaluate(() => window.scrollBy(0, 24));
+  await shot('training');
   if (errors.length) throw new Error(errors.join('\n'));
   await ctx.close();
 }
