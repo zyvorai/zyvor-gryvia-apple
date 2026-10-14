@@ -33,6 +33,7 @@ for (const theme of ['light', 'dark']) {
   const shot = async name => { await page.waitForTimeout(250); await page.screenshot({ path: join(out, `${name}-${theme}.jpg`), type: 'jpeg', quality: 86 }); };
   await shot('live');
   await page.click('[data-view="models"]'); await page.waitForSelector('#model-list [data-model]'); await shot('models');
+  for (let k = 0; k < 5; k++) { await page.click('#refresh'); await page.waitForTimeout(200); }
   await page.click('[data-view="fleet"]'); await page.waitForSelector('#nodes .node-card'); await shot('fleet');
   await page.click('[data-view="training"]');
   await page.fill('#train-form [name="base"]', 'mlx-community/Llama-3.2-1B-Instruct-4bit');
