@@ -43,9 +43,11 @@ public final class MemoryPressureMonitor: @unchecked Sendable {
                 host_statistics64(mach_host_self(), HOST_VM_INFO64, p, &count)
             }
         }
-        if status == KERN_SUCCESS {
+        // host_page_size, not the vm_kernel_page_size global, which Swift 6 rejects as shared mutable state.
+        var pageSize: vm_size_t = 0
+        if status == KERN_SUCCESS, host_page_size(mach_host_self(), &pageSize) == KERN_SUCCESS {
             // Free + inactive is an estimate of available/reclaimable memory, not a reservation guarantee.
-            let bytes = (Double(stats.free_count) + Double(stats.inactive_count)) * Double(vm_kernel_page_size)
+            let bytes = (Double(stats.free_count) + Double(stats.inactive_count)) * Double(pageSize)
             out["availableGiB"] = bytes / pow(1024, 3)
         }
         #endif

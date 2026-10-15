@@ -77,8 +77,9 @@ def _kill_group(proc: subprocess.Popen, grace=0.4) -> None:
     deadline=time.monotonic()+grace
     while time.monotonic()<deadline:
         proc.poll()
+        # macOS reports EPERM, not ESRCH, once only unreaped exited members remain.
         try: os.killpg(proc.pid,0)
-        except ProcessLookupError: break
+        except (ProcessLookupError, PermissionError): break
         time.sleep(0.02)
     try: os.killpg(proc.pid, signal.SIGKILL)
     except (ProcessLookupError, PermissionError): pass

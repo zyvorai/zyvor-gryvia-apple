@@ -389,7 +389,7 @@ class CheckpointPlacementScenario(unittest.TestCase):
 class NewCLIWorkflow(unittest.TestCase):
     def test_stage_fit_and_deploy_on_another_mac_via_cli(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root=Path(tmp); models=root/'models'; models.mkdir(); file=models/'m.gguf'; file.write_bytes(b'model')
+            root=Path(tmp).resolve(); models=root/'models'; models.mkdir(); file=models/'m.gguf'; file.write_bytes(b'model')
             digest=hashlib.sha256(file.read_bytes()).hexdigest()
             store=Store(str(root/'db')); store.register('b',dict(budgetGiB=8,runtimes=['serve']))
             store.model('m',dict(memoryGiB=1,paramsB=1,quant='q4',path='/a/m.gguf',node='a',sha256=digest))
