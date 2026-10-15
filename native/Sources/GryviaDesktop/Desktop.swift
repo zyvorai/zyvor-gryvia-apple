@@ -868,32 +868,44 @@ struct ContentView: View {
     func jobRows(_ jobs: [Job]) -> some View {
         VStack(spacing: 0) {
             if jobs.isEmpty { Text("No workloads yet. Press + to submit one.").foregroundStyle(.secondary).padding() }
-            ForEach(jobs) { j in
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text(j.spec.model ?? j.spec.runtime).bold()
-                        Text(String(j.id.prefix(10)) + " · " + j.tenant + (j.reason.isEmpty ? "" : " · " + j.reason))
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    StateBadge(state: j.state)
-                    Text("\(j.spec.memoryGiB, specifier: "%.1f") GiB").foregroundStyle(.secondary).monospacedDigit()
-                    if ["queued", "running"].contains(j.state) {
-                        Button("Cancel") { Task { await fleet.action("api/cancel", ["id": j.id]) } }
-                    }
-                }
-                .padding(.vertical, 8).contentShape(Rectangle()).onTapGesture { selected = j }
-                .contextMenu {
-                    Button("Show logs") { selected = j }
-                    if j.state == "queued" { Button("Raise priority +10") { Task { await fleet.bump(j) } } }
-                    Button("Clone into submit form") { fleet.clone(j); showSubmit = true }
-                    if ["failed", "cancelled", "succeeded"].contains(j.state) { Button("Retry") { Task { await fleet.retry(j) } } }
-                    if ["queued", "running"].contains(j.state) { Button("Cancel", role: .destructive) { Task { await fleet.action("api/cancel", ["id": j.id]) } } }
-                    Button("Copy job ID") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(j.id, forType: .string) }
-                }
+            ForEach(jobs) { job in
+                jobRow(job)
                 Divider()
             }
         }
+    }
+
+    func jobRow(_ job: Job) -> some View {
+        HStack {
+            VStack(alignment: .leading) {
+                Text(job.spec.model ?? job.spec.runtime).bold()
+                Text(jobDetail(job)).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            StateBadge(state: job.state)
+            Text(String(format: "%.1f GiB", job.spec.memoryGiB))
+                .foregroundStyle(.secondary).monospacedDigit()
+            if ["queued", "running"].contains(job.state) {
+                Button("Cancel") { Task { await fleet.action("api/cancel", ["id": job.id]) } }
+            }
+        }
+        .padding(.vertical, 8).contentShape(Rectangle()).onTapGesture { selected = job }
+        .contextMenu { jobMenu(job) }
+    }
+
+    func jobDetail(_ job: Job) -> String {
+        var parts = [String(job.id.prefix(10)), job.tenant]
+        if !job.reason.isEmpty { parts.append(job.reason) }
+        return parts.joined(separator: " · ")
+    }
+
+    @ViewBuilder func jobMenu(_ job: Job) -> some View {
+        Button("Show logs") { selected = job }
+        if job.state == "queued" { Button("Raise priority +10") { Task { await fleet.bump(job) } } }
+        Button("Clone into submit form") { fleet.clone(job); showSubmit = true }
+        if ["failed", "cancelled", "succeeded"].contains(job.state) { Button("Retry") { Task { await fleet.retry(job) } } }
+        if ["queued", "running"].contains(job.state) { Button("Cancel", role: .destructive) { Task { await fleet.action("api/cancel", ["id": job.id]) } } }
+        Button("Copy job ID") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(job.id, forType: .string) }
     }
 
     var alertList: some View {

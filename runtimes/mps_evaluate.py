@@ -4,6 +4,8 @@
 """MPS smoke/benchmark adapter; synchronizes GPU work before reporting duration."""
 import argparse,os,time,json
 
+from _common import verify_inputs  # input checks run when the helpers load
+
 def main():
     p=argparse.ArgumentParser();p.add_argument('--size',type=int,default=2048);p.add_argument('--iterations',type=int,default=10);a=p.parse_args()
     if not 1<=a.size<=8192 or not 1<=a.iterations<=1000:p.error('invalid benchmark dimensions')

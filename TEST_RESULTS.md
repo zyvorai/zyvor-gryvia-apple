@@ -131,3 +131,14 @@ Data: 24 Gryvia facts × 5 question stems = 120 chat-format rows; held-out = the
 - Ranked by final validation loss: lr 1e-4 / 8 layers 0.609 (best), lr 1e-4 / 4 layers 0.618, lr 1e-5 / 8 layers 1.419, lr 1e-5 / 4 layers 2.112. Each run produced a registered LoRA adapter with signed provenance.
 - Caveats: a 135 M-parameter model on a toy dataset with 30 iterations, one seed per cell, so the ranking says the larger learning rate learns faster here, nothing about quality; the 0.609 vs 0.618 difference is within noise. The run used one Mac, so fan-out across several Macs is covered by unit tests only.
 - The mini was cleaned afterwards (processes stopped, venv and state removed).
+
+## Fleet reliability PR (15 October 2026, Linux review environment)
+
+Changes and usage: [docs/FLEET-RELIABILITY.md](docs/FLEET-RELIABILITY.md).
+
+- Added regression scenarios for artifact locality and staged replicas; live headroom/working-set gates; critical-pressure cancellation; strict chain rechecks; signed-status consistency; JSON and SSE agent relay; lease/node/sequence fencing; bounded queues, timeouts, client close and stale deployment ownership; deterministic, disjoint dataset splits; artifact tamper/symlink rejection; SIGTERM escalation; checkpoint offsets and changed-input refusal; and CLI stage → fit → deploy.
+- An actual HTTP controller, a simulated polling agent and a separate mock runtime complete the relay integration scenario. A fake MLX subprocess exercises failed-segment → remaining-step continuation. Neither test measures GPU execution or model quality.
+- The native CI fix addresses the observed SwiftUI expression timeout at `Desktop.swift:869`. Native memory-pressure collection and the Swift relay require the supplied macOS build/XCTest/smoke checks. No Swift compiler, macOS or Apple GPU is available in this environment, so these changes have **not been compiled or hardware-validated here**.
+- The original process-group test used a fixed delay and `pgrep`; it failed in the untouched baseline in this environment. It now waits for a child-written PID readiness marker and verifies reaping, and an additional test verifies escalation against a child that ignores SIGTERM.
+- Definitive command output and pass counts are in the ZIP's `validation/` directory. Earlier entries in this file describe prior work and are not fresh measurements from this PR.
+- Final validation for this PR: **192 Python tests passed in 34.822 s** (Python 3.12.14 on Linux). Compilation, JavaScript syntax, source headers, version consistency, shell syntax and `git diff --check` passed. Python 3.14 CI, Swift/XCTest, the new native relay smoke and real GPU/fleet validation remain pending. The final suite emitted no uncaught request-handler tracebacks after shutdown and mock-disconnect handling were corrected.

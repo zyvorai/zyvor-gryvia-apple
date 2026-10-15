@@ -53,7 +53,7 @@ def policy_gate(policy,presence):
 
 class Store:
     def __init__(self, path, clock=time.time):
-        self.clock=clock; self.lock=threading.RLock(); self._gate_last={}; self.require_verified=False
+        self.clock=clock; self.lock=threading.RLock(); self._gate_last={}; self.require_verified=False; self.require_verified_chain=False
         self.db=sqlite3.connect(path, check_same_thread=False, isolation_level=None)
         self.db.row_factory=sqlite3.Row
         self.db.executescript('''PRAGMA journal_mode=WAL;
@@ -84,6 +84,7 @@ class Store:
         cols=[r['name'] for r in self.db.execute('PRAGMA table_info(jobs)')]
         if 'started' not in cols: self.db.execute('ALTER TABLE jobs ADD COLUMN started REAL')
         if 'finished' not in cols: self.db.execute('ALTER TABLE jobs ADD COLUMN finished REAL')
+        if 'checkpoint_node' not in cols: self.db.execute('ALTER TABLE jobs ADD COLUMN checkpoint_node TEXT')
         if 'spec_sha' not in cols: self.db.execute('ALTER TABLE jobs ADD COLUMN spec_sha TEXT')
         if 'budget' not in [r['name'] for r in self.db.execute('PRAGMA table_info(tenants)')]: self.db.execute('ALTER TABLE tenants ADD COLUMN budget REAL')
         if 'watts' not in [r['name'] for r in self.db.execute('PRAGMA table_info(node_telemetry)')]: self.db.execute('ALTER TABLE node_telemetry ADD COLUMN watts REAL')
@@ -134,12 +135,22 @@ class Store:
         slots=body.get('slots',1)
         if type(slots) is not int or slots<1 or slots>64: raise Problem('slots must be 1..64')
         if not isinstance(body.get('runtimes'),list) or not all(x in RUNTIMES for x in body['runtimes']): raise Problem('invalid runtimes')
+        for field in ('availableGiB','metalWorkingSetGiB','memoryHeadroomGiB'):
+            if field in body:
+                v=body[field]
+                if isinstance(v,bool) or not isinstance(v,(int,float)) or not math.isfinite(v) or v<0:
+                    raise Problem('invalid '+field)
+        if body.get('pressure','unknown') not in ('normal','warning','critical','unknown'): raise Problem('invalid pressure')
         body['slots']=slots
         def run():
             self.db.execute('INSERT INTO nodes(id,body,seen) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body,seen=excluded.seen',(ident,json.dumps(body),self.clock()))
             self.record_telemetry(ident,body)
             self.pin_key(ident,body.get('attestKey'))
             self.enforce_policy(ident,body)
+            if body.get('pressure')=='critical':
+                for job in self.db.execute("SELECT id FROM jobs WHERE node=? AND state='running'",(ident,)).fetchall():
+                    self.db.execute("UPDATE jobs SET state='cancelling',reason='critical memory pressure' WHERE id=?",(job['id'],))
+                    self.decide(job['id'],ident,'cancel','critical memory pressure')
         self.tx(run)
     def pin_key(self,node,key):
         """Trust-on-first-use pinning of a node's attestation public key; a different key later is refused and logged."""
@@ -179,6 +190,7 @@ class Store:
     def submit(self, tenant, body):
         if not isinstance(tenant,str) or not tenant: raise Problem('invalid tenant')
         if not isinstance(body,dict): raise Problem('object required')
+        if 'checkpointNode' in body: raise Problem('checkpointNode is assigned by the scheduler')
         positive(body.get('memoryGiB'),'memoryGiB')
         if body.get('runtime') not in RUNTIMES: raise Problem('unsupported runtime')
         if body.get('kind','inference') not in KINDS: raise Problem('invalid kind')
@@ -196,6 +208,8 @@ class Store:
             row=self.db.execute('SELECT body FROM models WHERE id=?',(body['modelId'],)).fetchone()
             prov=(json.loads(row['body']).get('provenance') if row else None) or {}
             if not prov.get('verified'): raise Problem('policy requireVerified: model %s has no verified provenance'%body['modelId'],403)
+        if self.require_verified_chain and body.get('kind') in ('serve','benchmark','evaluate','quantize','fuse'):
+            self.verify_chain(body)
         after=body.get('after',[])
         if not isinstance(after,list) or len(after)>16 or not all(isinstance(x,str) and len(x)<=64 for x in after): raise Problem('invalid after')
         if 'datasetId' in body and (not isinstance(body['datasetId'],str) or not 0<len(body['datasetId'])<=128): raise Problem('invalid datasetId')
@@ -263,28 +277,141 @@ class Store:
                 if any(d['state']!='succeeded' for d in deps): reason='waiting for dependency'
                 elif b['runtime'] not in nb['runtimes']: reason='runtime unavailable'
                 elif b.get('node') and b['node']!=node: reason='node selector'
+                elif j['checkpoint_node'] and j['checkpoint_node']!=node: reason='training checkpoint is on '+j['checkpoint_node']
                 elif used[j['tenant']]+b['memoryGiB']>tenants[j['tenant']]['quota']: reason='tenant memory quota'
                 elif b['mode']=='exclusive' and local: reason='waiting for exclusive worker'
                 elif sum(json.loads(x['body'])['memoryGiB'] for x in local)+b['memoryGiB']>nb['budgetGiB']: reason='node memory reservation budget'
                 elif nb.get('pressure')=='warning': reason='memory pressure'
+                elif 'metalWorkingSetGiB' in nb and sum(json.loads(x['body'])['memoryGiB'] for x in local)+b['memoryGiB']>nb['metalWorkingSetGiB']: reason='Metal recommended working set'
+                elif 'availableGiB' in nb and b['memoryGiB']>max(0,nb['availableGiB']-nb.get('memoryHeadroomGiB',1)): reason='live memory headroom'
+                if not reason: reason=self.artifact_gate(b,node,j['tenant'])
+                if not reason and (self.require_verified or self.require_verified_chain):
+                    try: self.verify_chain(b,chain=self.require_verified_chain)
+                    except Problem as error: reason=error.message
                 if reason:
                     if j['reason']!=reason: self.decide(j['id'],node,'wait',reason)
                     self.db.execute('UPDATE jobs SET reason=? WHERE id=?',(reason,j['id'])); continue
+                if b.get('kind')=='train':
+                    self.db.execute('UPDATE jobs SET checkpoint_node=? WHERE id=?',(node,j['id']))
                 lease=uuid.uuid4().hex
                 self.db.execute("UPDATE jobs SET state='running',node=?,lease=?,expires=?,started=?,attempt=attempt+1,reason='' WHERE id=?",(node,lease,self.clock()+20,self.clock(),j['id'])); self.event('job.claimed',j['id'],node); self.decide(j['id'],node,'admit','admitted on '+node)
-                spec=self.resolve(b)
+                spec=self.resolve(b,node)
                 spec_sha=hashlib.sha256(json.dumps(spec,sort_keys=True,separators=(',',':')).encode()).hexdigest()
                 self.db.execute('UPDATE jobs SET spec_sha=? WHERE id=?',(spec_sha,j['id']))
                 return dict(id=j['id'],lease=lease,spec=spec,expires=self.clock()+20,specSha256=spec_sha)
             return None
         return self.tx(run)
-    def resolve(self, spec):
+    def verify_chain(self,spec,chain=True):
+        if spec.get('kind') not in ('serve','benchmark','evaluate','quantize','fuse'): return
+        mid=spec.get('modelId')
+        row=self.db.execute('SELECT body FROM models WHERE id=?',(mid,)).fetchone() if mid else None
+        prov=(json.loads(row['body']).get('provenance') if row else None) or {}
+        field='chainVerified' if chain else 'verified'
+        if not prov.get(field): raise Problem('policy provenance: '+str(mid or 'missing modelId')+' requires '+field,403)
+
+    def stage_artifact(self,body):
+        """Register an administrator-staged copy. Bytes are checked again by the runtime before use."""
+        table={'model':'models','dataset':'datasets'}.get(body.get('kind'))
+        if not table: raise Problem('artifact kind must be model or dataset')
+        ident,node,path,digest=(body.get(k) for k in ('id','node','path','sha256'))
+        if not all(isinstance(v,str) and v for v in (ident,node,path,digest)) or not path.startswith('/') or len(path)>2048 or not re.fullmatch('[0-9a-f]{64}',digest): raise Problem('invalid artifact location')
+        def run():
+            if not self.db.execute('SELECT 1 FROM nodes WHERE id=?',(node,)).fetchone(): raise Problem('node not found',404)
+            row=self.db.execute('SELECT body FROM '+table+' WHERE id=?',(ident,)).fetchone()
+            if not row: raise Problem('artifact not found',404)
+            obj=json.loads(row['body'])
+            if obj.get('sha256')!=digest: raise Problem('staged artifact digest differs from registry',409)
+            locations=obj.setdefault('locations',{})
+            if node not in locations and len(locations)>=64: raise Problem('artifact location limit reached')
+            locations[node]=dict(path=path,sha256=digest)
+            self.db.execute('UPDATE '+table+' SET body=? WHERE id=?',(json.dumps(obj),ident))
+            self.event('artifact.staged',ident,node)
+        self.tx(run)
+
+    @staticmethod
+    def local_artifact(obj,node):
+        location=obj.get('locations',{}).get(node) if node else None
+        if isinstance(location,dict) and location.get('sha256')==obj.get('sha256'):
+            return dict(obj,path=location['path'],node=node)
+        return obj
+
+    def artifact_gate(self,spec,node,tenant):
+        """A local path is meaningful only on its producing node; never silently send it to another Mac."""
+        args=spec.get('args',[])
+        for table,field,placeholder in (('models','modelId','{{model.path}}'),('datasets','datasetId','{{dataset.path}}')):
+            ident=spec.get(field)
+            if not ident or (table=='models' and spec.get('kind')=='download') or (table=='datasets' and spec.get('kind')=='dataset'): continue
+            row=self.db.execute('SELECT body FROM '+table+' WHERE id=?',(ident,)).fetchone()
+            # Legacy raw jobs without managed paths remain supported. Placeholders must resolve.
+            if not row:
+                if any(placeholder in a for a in args): return 'missing '+field+' artifact'
+                continue
+            obj=self.local_artifact(json.loads(row['body']),node)
+            if obj.get('tenants') and tenant not in obj['tenants']: return 'artifact access denied'
+            if obj.get('node') and obj['node']!=node: return field+' artifact is on '+obj['node']
+            if any(placeholder in a for a in args) and (not obj.get('path') or obj.get('status') not in ('ready','deployed')): return field+' artifact not ready'
+        return ''
+
+    def fit(self,body,tenant='default'):
+        """Explain inference fit using explicit KV dimensions; this is an estimate, never isolation."""
+        if not isinstance(body,dict): raise Problem('object required')
+        mid=body.get('modelId')
+        with self.lock:
+            row=self.db.execute('SELECT body FROM models WHERE id=?',(mid,)).fetchone() if mid else None
+            model=json.loads(row['body']) if row else {}
+            if mid and (not row or (model.get('tenants') and tenant not in model['tenants'])): raise Problem('model not found',404)
+            params=body.get('paramsB',model.get('paramsB'))
+            positive(params,'paramsB')
+            if params>10000: raise Problem('paramsB too large')
+            quant=body.get('quant',model.get('quant',''))
+            if not isinstance(quant,str): raise Problem('invalid quant')
+            weights=self.estimate_memory_gib(params,quant)-0.75
+            values={}
+            for key,default,maximum in [('contextTokens',4096,1048576),('concurrency',1,256),('kvLayers',32,512),('kvHeads',8,256),('headDim',128,1024),('kvBytes',2,4)]:
+                v=body.get(key,default)
+                if type(v) is not int or not 1<=v<=maximum: raise Problem('invalid '+key)
+                values[key]=v
+            kv=2*values['kvLayers']*values['kvHeads']*values['headDim']*values['kvBytes']*values['contextTokens']*values['concurrency']/1024**3
+            required=math.ceil((weights+kv+0.75)*1.1*10)/10
+            active=self.db.execute("SELECT node,tenant,body FROM jobs WHERE state IN ('running','cancelling')").fetchall()
+            tenant_row=self.db.execute('SELECT quota FROM tenants WHERE id=?',(tenant,)).fetchone()
+            quota=tenant_row['quota'] if tenant_row else 0
+            used=sum(json.loads(j['body'])['memoryGiB'] for j in active if j['tenant']==tenant)
+            nodes=[]
+            for row in self.db.execute('SELECT * FROM nodes ORDER BY id'):
+                nb=json.loads(row['body']); reserved=sum(json.loads(j['body'])['memoryGiB'] for j in active if j['node']==row['id'])
+                capacity=max(0,min(nb['budgetGiB'],nb.get('metalWorkingSetGiB',nb['budgetGiB']))-reserved)
+                if 'availableGiB' in nb: capacity=min(capacity,max(0,nb['availableGiB']-nb.get('memoryHeadroomGiB',1)))
+                reason=''
+                if self.clock()-row['seen']>30: reason='offline'
+                elif row['drain']: reason='draining'
+                elif nb.get('thermal') in ('serious','critical'): reason='thermal gate'
+                elif nb.get('pressure') in ('warning','critical'): reason='memory pressure'
+                elif not self.gate(row['id'],nb)[0]: reason=self.gate(row['id'],nb)[1]
+                elif model.get('node') and self.local_artifact(model,row['id']).get('node')!=row['id']: reason='model artifact is on '+model['node']
+                elif any(json.loads(j['body']).get('mode')=='exclusive' for j in active if j['node']==row['id']): reason='exclusive job running'
+                elif len([j for j in active if j['node']==row['id']])>=nb.get('slots',1): reason='execution slots occupied'
+                elif used+required>quota: reason='tenant quota'
+                elif required>capacity: reason='insufficient memory headroom'
+                nodes.append(dict(node=row['id'],fits=not reason,reason=reason,availableGiB=round(capacity,2)))
+            return dict(estimatedGiB=required,weightsGiB=round(weights,2),kvCacheGiB=round(kv,2),assumptions=values,
+                        warning='Estimate only; KV defaults must match the model architecture. Reservations do not isolate memory.',nodes=nodes)
+
+    def resolve(self, spec, node=None):
         """Fill {{model.path}} / {{model.id}} / {{dataset.path}} in args at claim time, so pipeline steps can use earlier outputs."""
         out=dict(spec); vals={}
         m=self.db.execute('SELECT body FROM models WHERE id=?',(spec.get('modelId',''),)).fetchone() if spec.get('modelId') else None
-        if m: mb=json.loads(m['body']); vals.update({'{{model.path}}':mb.get('path',''),'{{model.id}}':spec['modelId'],'{{model.source}}':mb.get('source','')})
+        if m: mb=self.local_artifact(json.loads(m['body']),node); vals.update({'{{model.path}}':mb.get('path',''),'{{model.id}}':spec['modelId'],'{{model.source}}':mb.get('source','')})
         d=self.db.execute('SELECT body FROM datasets WHERE id=?',(spec.get('datasetId',''),)).fetchone() if spec.get('datasetId') else None
-        if d: vals.update({'{{dataset.path}}':json.loads(d['body']).get('path',''),'{{dataset.id}}':spec['datasetId']})
+        if d: vals.update({'{{dataset.path}}':self.local_artifact(json.loads(d['body']),node).get('path',''),'{{dataset.id}}':spec['datasetId']})
+        inputs=[]
+        for table,field in (('models','modelId'),('datasets','datasetId')):
+            if spec.get('kind') in ('download','dataset'): continue
+            row=self.db.execute('SELECT body FROM '+table+' WHERE id=?',(spec.get(field,''),)).fetchone()
+            obj=self.local_artifact(json.loads(row['body']),node) if row else {}
+            if obj.get('path') and re.fullmatch('[0-9a-f]{64}',obj.get('sha256','')):
+                inputs.append(dict(path=obj['path'],sha256=obj['sha256']))
+        if inputs: out['inputs']=inputs
         if vals:
             args=[]
             for x in spec.get('args',[]):
@@ -307,7 +434,7 @@ class Store:
             self.expire(); j=self.db.execute('SELECT * FROM jobs WHERE id=?',(ident,)).fetchone()
             if not j or j['node']!=node or j['lease']!=lease or j['state'] not in ['running','cancelling']: raise Problem('stale completion',409)
             self.meter(j)
-            att=self.check_attestation(node,j,attestation)
+            att=self.check_attestation(node,j,attestation,success)
             b=json.loads(j['body']); timed_out=j['reason']=='job timeout'
             yielded=j['state']=='cancelling' and j['reason']==OWNER_RETURNED
             state='queued' if yielded else 'cancelled' if j['state']=='cancelling' and not timed_out else ('succeeded' if success and not timed_out else ('queued' if j['attempt']<=b['retries'] else 'failed'))
@@ -342,11 +469,11 @@ class Store:
                     for key in ('trainLoss','valLoss','lr','tokensPerSec','itPerSec','peakGB'):
                         v=obj.get(key)
                         if isinstance(v,(int,float)) and not isinstance(v,bool): self.db.execute('INSERT INTO run_metrics VALUES(?,?,?,?,?)',(ident,obj['step'],key,float(v),self.clock()))
-                elif obj.get('kind')=='endpoint' and spec.get('kind')=='serve' and isinstance(obj.get('url'),str) and spec.get('modelId'):
+                elif obj.get('kind')=='endpoint' and j['state']=='running' and spec.get('kind')=='serve' and isinstance(obj.get('url'),str) and spec.get('modelId'):
                     row=self.db.execute('SELECT body FROM models WHERE id=?',(spec['modelId'],)).fetchone()
                     if row:
                         m=json.loads(row['body'])
-                        m['endpoints']=[obj['url']]; m['status']='deployed'; m['deployJob']=ident
+                        m['endpoints']=[obj['url']]; m['status']='deployed'; m['deployJob']=ident; m['endpointNode']=node; m['agentRelay']=obj.get('agentRelay') is True
                         if m.get('runtime')=='mlx': m['workerModel']='default_model'   # mlx_lm.server serves the model it was started with under this name   # one serve job per model: the newest replaces any stale entry
                         self.db.execute('UPDATE models SET body=? WHERE id=?',(json.dumps(m),spec['modelId'])); self.event('model.deployed',spec['modelId'],obj['url'])
         self.tx(run)
@@ -472,24 +599,25 @@ class Store:
             self.event('model.'+m['status'],model,ident)
         if kind=='train' and success and result and row:
             base=json.loads(row['body']); tag=ident[:6]
-            child=dict(runtime='mlx',memoryGiB=base.get('memoryGiB',4),status='ready',path=result.get('adapterPath',''),parent=model,source=base.get('source',''),quant=base.get('quant',''),
+            child=dict(sha256=result.get('sha256',''),artifactType=result.get('artifactType','directory'),runtime='mlx',memoryGiB=base.get('memoryGiB',4),status='ready',path=result.get('adapterPath',''),parent=model,source=base.get('source',''),quant=base.get('quant',''),
                        kind='lora-adapter',dataset=spec.get('datasetId',''),trainJob=ident,finalValLoss=result.get('finalValLoss'),finalTrainLoss=result.get('finalTrainLoss'),node=node,updated=self.clock(),provenance=self._prov(ident,'train',attestation,model))
             self.db.execute('INSERT OR REPLACE INTO models VALUES(?,?)',(f'{model}-lora-{tag}',json.dumps(child))); self.event('model.adapter',f'{model}-lora-{tag}',ident)
-        if kind=='serve' and row:
-            m=json.loads(row['body']); m.pop('deployJob',None); m['endpoints']=[]; m['status']='ready' if m.get('path') else m.get('status','ready')
+        if kind=='serve' and row and json.loads(row['body']).get('deployJob') in (None,ident):
+            m=json.loads(row['body']); m.pop('deployJob',None); m.pop('endpointNode',None); m.pop('agentRelay',None); m['endpoints']=[]; m['status']='ready' if m.get('path') else m.get('status','ready')
             self.db.execute('UPDATE models SET body=? WHERE id=?',(json.dumps(m),model)); self.event('model.undeployed',model,ident)
         if kind=='fuse' and success and result and row:
             parent=json.loads(row['body'])
-            child=dict(runtime='mlx',memoryGiB=parent.get('memoryGiB',4),status='ready',path=result.get('path',''),sizeBytes=result.get('bytes',0),parent=model,
+            child=dict(sha256=result.get('sha256',''),artifactType=result.get('artifactType','directory'),runtime='mlx',memoryGiB=parent.get('memoryGiB',4),status='ready',path=result.get('path',''),sizeBytes=result.get('bytes',0),parent=model,
                        source=parent.get('source',''),quant=parent.get('quant',''),kind='fused',fusedFrom=parent.get('trainJob',''),dataset=parent.get('dataset',''),node=node,updated=self.clock(),provenance=self._prov(ident,'fuse',attestation,model))
             fid=f'{model}-fused'
             self.db.execute('INSERT OR REPLACE INTO models VALUES(?,?)',(fid,json.dumps(child))); self.event('model.fused',fid,ident)
         if kind=='quantize' and success and result and row:
             parent=json.loads(row['body']); q=result.get('quant','quant')
-            child=dict(parent,status='ready',path=result.get('path',''),sha256=result.get('sha256',''),sizeBytes=result.get('bytes',0),quant=q,parent=model,updated=self.clock(),provenance=self._prov(ident,'quantize',attestation,model))
-            child.pop('endpoints',None); child['memoryGiB']=round(parent['memoryGiB']*self.estimate_memory_gib(1,q)/max(self.estimate_memory_gib(1,parent.get('quant','')),0.1),1) if parent.get('paramsB') is None else self.estimate_memory_gib(parent['paramsB'],q)
+            child=dict(parent,status='ready',path=result.get('path',''),sha256=result.get('sha256',''),sizeBytes=result.get('bytes',0),quant=q,parent=model,node=node,updated=self.clock(),provenance=self._prov(ident,'quantize',attestation,model))
+            for field in ('endpoints','deployJob','endpointNode','agentRelay','locations'): child.pop(field,None)
+            child['memoryGiB']=round(parent['memoryGiB']*self.estimate_memory_gib(1,q)/max(self.estimate_memory_gib(1,parent.get('quant','')),0.1),1) if parent.get('paramsB') is None else self.estimate_memory_gib(parent['paramsB'],q)
             self.db.execute('INSERT OR REPLACE INTO models VALUES(?,?)',(f'{model}-{q}',json.dumps(child))); self.event('model.quantized',f'{model}-{q}',ident)
-    def check_attestation(self,node,job,att):
+    def check_attestation(self,node,job,att,success=None):
         """Verify a node-signed statement about a finished job. Returns {verified, why, id} or None when none was sent."""
         if att is None: return None
         def record(verified,why,payload='',sig=''):
@@ -506,6 +634,10 @@ class Store:
         except ValueError: return record(False,'payload is not JSON',payload,sig)
         if not isinstance(obj,dict) or obj.get('job')!=job['id']: return record(False,'attestation is for a different job',payload,sig)
         if obj.get('specSha256')!=job['spec_sha']: return record(False,'job spec hash does not match what was claimed',payload,sig)
+        if success is not None and obj.get('success') is not success: return record(False,'completion success does not match signed status',payload,sig)
+        spec=json.loads(job['body'])
+        if spec.get('kind') in ('download','train','fuse','quantize') and not re.fullmatch('[0-9a-f]{64}',str(obj.get('resultSha256',''))):
+            return record(False,'artifact result requires a signed digest',payload,sig)
         if obj.get('resultSha256'):
             last=None
             for row in self.db.execute("SELECT text FROM logs WHERE job=? AND text LIKE '{\"kind\": \"result\"%' ORDER BY seq DESC LIMIT 1",(job['id'],)): last=row['text']

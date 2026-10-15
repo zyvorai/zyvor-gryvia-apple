@@ -50,6 +50,7 @@ jobs:
       - run: swift --version && xcodebuild -version
       - run: make verify
       - run: bash scripts/mac-smoke.sh
+      - run: python3 scripts/native-relay-smoke.py
       - name: package (ad hoc signed)
         run: bash scripts/package-mac.sh "$(cat VERSION)"
       - uses: actions/upload-artifact@v7

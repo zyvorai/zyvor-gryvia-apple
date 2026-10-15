@@ -59,6 +59,10 @@ Install the app instead: download the DMG or pkg from the [releases](https://git
 
 One GPU per Mac; GPU utilisation is device-wide, not per job; reservations are admission bookkeeping, not isolation; energy is an estimate and needs an optional root helper; training is single-Mac LoRA; there is no sandbox around runtimes, so enrol only Macs you would let an admin run code on. See [SECURITY.md](SECURITY.md) and [TEST_RESULTS.md](TEST_RESULTS.md) for what was measured, on what, and what was not verified.
 
+## Fleet reliability additions
+
+Outbound agent inference relay, staged artifact locations with input checksums, live memory-pressure admission, a model-fit advisor, safer subprocess cleanup and seeded training splits are described in [Fleet reliability](docs/FLEET-RELIABILITY.md). See its validation limits before deploying the new native components.
+
 ## Where it fits
 
 Gryvia is not a way to split one model across Macs (see exo and MLX distributed for that). It answers who gets which Mac, when, and within what limits. [docs/COMPARISON.md](docs/COMPARISON.md) has the longer comparison.

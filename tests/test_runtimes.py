@@ -176,7 +176,7 @@ class TrainParseTests(unittest.TestCase):
         f = d / "d.jsonl"
         f.write_text("\n".join(json.dumps({"text": f"row {i}"}) for i in range(20)))
         t, v = mlx_lora.prepare(f, d / "run", 0.1)
-        self.assertEqual((t, v), (18, 2))
+        self.assertEqual((t, v), (16, 2))
         f.write_text('{"text":"a"}\n')
         with self.assertRaises(SystemExit):
             mlx_lora.prepare(f, d / "run2", 0.1)
@@ -190,15 +190,22 @@ class SignalForwardingTests(unittest.TestCase):
             from _common import run_group
             run_group(["sleep", "60"], timeout=100)
         """)
-        proc = subprocess.Popen([sys.executable, "-c", code])
-        time.sleep(0.8)
-        child = subprocess.run(["pgrep", "-P", str(proc.pid)], capture_output=True, text=True).stdout.split()
-        self.assertTrue(child, "sleep child should exist")
-        proc.send_signal(signal.SIGTERM)
-        self.assertEqual(proc.wait(timeout=10), 143)
-        time.sleep(0.5)
-        alive = subprocess.run(["ps", "-p", child[0]], capture_output=True, text=True).returncode == 0
-        self.assertFalse(alive, "child must not be orphaned")
+        with tempfile.TemporaryDirectory() as tmp:
+            marker = Path(tmp) / "child.pid"
+            child_code = f"import os,time; open({str(marker)!r}, 'w').write(str(os.getpid())); time.sleep(60)"
+            code = f"import sys; sys.path.insert(0, {str(ROOT / 'runtimes')!r}); from _common import run_group; run_group([sys.executable, '-c', {child_code!r}], timeout=100)"
+            proc = subprocess.Popen([sys.executable, "-c", code])
+            try:
+                for _ in range(100):
+                    if marker.exists() and marker.read_text(): break
+                    time.sleep(0.02)
+                self.assertTrue(marker.exists(), "child should report readiness")
+                pid = int(marker.read_text())
+                proc.send_signal(signal.SIGTERM)
+                self.assertEqual(proc.wait(timeout=10), 143)
+                with self.assertRaises(ProcessLookupError): os.kill(pid, 0)
+            finally:
+                if proc.poll() is None: proc.kill(); proc.wait()
 
 
 class PowerHelperParseTests(unittest.TestCase):

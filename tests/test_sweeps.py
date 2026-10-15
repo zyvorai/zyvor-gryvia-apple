@@ -11,6 +11,7 @@ class SweepTests(unittest.TestCase):
         self.s.register("mini", dict(budgetGiB=16, runtimes=["train", "mlx"]))
         self.s.tenant("acme", 16, 1)
         self.s.model("org__base", dict(memoryGiB=4, runtime="mlx", status="ready", path="/m"))
+        self.s.dataset("d1",dict(path="/d1",status="ready",node="mini"))
         self.base = "org/base"
 
     def tearDown(self):

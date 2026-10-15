@@ -23,7 +23,9 @@ public enum GryviaError: Error, LocalizedError {
     case invalid(String)
     public var errorDescription: String? { if case let .invalid(s) = self { return s }; return nil }
 }
+public struct InputArtifact: Codable, Sendable { public let path: String; public let sha256: String }
 public struct Spec: Codable, Sendable {
+    public let inputs: [InputArtifact]?
     public let runtime: String
     public let memoryGiB: Double
     public let priority: Int
@@ -311,6 +313,7 @@ public enum Hardware {
             result["gpuUtilPct"] = gpu.utilizationPct; result["rendererPct"] = gpu.rendererPct
             result["tilerPct"] = gpu.tilerPct; result["gpuInUseMiB"] = gpu.inUseMiB
         }
+        result.merge(MemoryPressureMonitor.shared.report()) { _, new in new }
         result["presence"] = PresenceInfo.current().dictionary
         if let power = PowerFile.read() { result["power"] = power }
         if let p = CPUInfo.count("hw.perflevel0.physicalcpu") { result["cpuPerformanceCores"] = p }

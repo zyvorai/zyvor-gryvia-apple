@@ -1,14 +1,30 @@
 # SPDX-License-Identifier: BUSL-1.1
 # Copyright © 2026 Zyvor AI Labs Private Limited
-"""Bounded non-streaming OpenAI-compatible routing to administrator-allowlisted workers."""
+"""Bounded OpenAI-style routing over allowlisted HTTP origins or lease-fenced outbound agents."""
 import json, threading, time, urllib.request, urllib.error, urllib.parse
 from server.core import Problem
 
+class ClosingStream:
+    """Release eager admission even if a caller closes before requesting its first chunk."""
+    def __init__(self,iterator,cleanup): self.iterator=iterator; self.cleanup=cleanup; self.closed=False
+    def __iter__(self): return self
+    def __next__(self):
+        if self.closed: raise StopIteration
+        try: return next(self.iterator)
+        except BaseException:
+            self.close(); raise
+    def close(self):
+        if self.closed: return
+        self.closed=True
+        try: self.iterator.close()
+        finally: self.cleanup()
+
+
 class Gateway:
-    def __init__(self, allowed_origins=(), max_inflight=2, allow_loopback=False):
+    def __init__(self, allowed_origins=(), max_inflight=2, allow_loopback=False, relay=None):
         if type(max_inflight) is not int or not 1<=max_inflight<=64: raise Problem('invalid inference concurrency')
         if not isinstance(allowed_origins,(list,tuple)) or not all(isinstance(x,str) for x in allowed_origins): raise Problem('invalid inference origins')
-        self.allowed=set(allowed_origins);self.allow_loopback=bool(allow_loopback);self.limit=max_inflight;self.lock=threading.Lock();self.active={};self.calls={}
+        self.relay=relay; self.allowed=set(allowed_origins);self.allow_loopback=bool(allow_loopback);self.limit=max_inflight;self.lock=threading.Lock();self.active={};self.calls={}
     def _validate(self, body, allow_stream):
         if body.get('stream') and not allow_stream:raise Problem('streaming is not supported here; use the streaming endpoint path or stream=false')
         model=body.get('model');messages=body.get('messages');maximum=body.get('max_tokens',256)
@@ -25,7 +41,11 @@ class Gateway:
         endpoints=catalog.get('endpoints',[])
         if not isinstance(endpoints,list):raise Problem('invalid model endpoints',503)
         candidates=[]
-        for e in endpoints:
+        if self.relay and catalog.get('agentRelay'):
+            node=catalog.get('endpointNode'); job=catalog.get('deployJob')
+            self.relay.serving(node,job)
+            candidates.append('agent-relay:'+node+':'+job)
+        for e in ([] if catalog.get("agentRelay") else endpoints):
             if not isinstance(e,str):continue
             u=urllib.parse.urlsplit(e)
             origin=f'{u.scheme}://{u.netloc}'
@@ -51,6 +71,13 @@ class Gateway:
         catalog,endpoint=self._admit(store,tenant,model)
         try:
             request={'model':catalog.get('workerModel',model),'messages':messages,'max_tokens':maximum,'stream':False}
+            if endpoint.startswith('agent-relay:'):
+                ident=self.relay.open(catalog['endpointNode'],catalog['deployJob'],request)
+                try: result=json.loads(b''.join(self.relay.chunks(ident)))
+                except (ValueError,UnicodeError): raise Problem('invalid inference response',502)
+                if not isinstance(result,dict) or not isinstance(result.get('choices'),list): raise Problem('invalid inference response',502)
+                with store.lock: store.event('inference.completed',tenant,model)
+                return result
             req=urllib.request.Request(endpoint+'/v1/chat/completions',data=json.dumps(request).encode(),headers={'Content-Type':'application/json'})
             try:
                 with self._opener().open(req,timeout=30) as r:
@@ -67,6 +94,23 @@ class Gateway:
         Bounded in bytes and wall time; the concurrency slot is released when the generator is closed."""
         model,messages,maximum=self._validate(body,True)
         catalog,endpoint=self._admit(store,tenant,model)
+        if endpoint.startswith('agent-relay:'):
+            try:
+                request={'model':catalog.get('workerModel',model),'messages':messages,'max_tokens':maximum,'stream':True}
+                ident=self.relay.open(catalog['endpointNode'],catalog['deployJob'],request)
+            except BaseException:
+                self._release(tenant,endpoint); raise
+            def relay_gen():
+                try:
+                    total=0; started=time.monotonic()
+                    for chunk in self.relay.chunks(ident):
+                        total+=len(chunk)
+                        if total>max_bytes or time.monotonic()-started>max_seconds: break
+                        yield chunk
+                    with store.lock: store.event('inference.streamed',tenant,model)
+                finally:
+                    self.relay.close(ident)
+            return ClosingStream(relay_gen(),lambda:(self.relay.close(ident),self._release(tenant,endpoint)))
         try:
             request={'model':catalog.get('workerModel',model),'messages':messages,'max_tokens':maximum,'stream':True}
             req=urllib.request.Request(endpoint+'/v1/chat/completions',data=json.dumps(request).encode(),headers={'Content-Type':'application/json','Accept':'text/event-stream'})
@@ -85,5 +129,5 @@ class Gateway:
                         if total>max_bytes or time.monotonic()-started>max_seconds:break
                         yield chunk
                 with store.lock:store.event('inference.streamed',tenant,model)
-            finally:self._release(tenant,endpoint)
-        return gen()
+            finally:resp.close()
+        return ClosingStream(gen(),lambda:(resp.close(),self._release(tenant,endpoint)))
