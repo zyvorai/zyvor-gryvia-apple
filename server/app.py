@@ -9,6 +9,8 @@ from server.core import Store, Problem
 from server.inference import Gateway
 from server.relay import AgentRelay
 
+IDLE_MAX_SECONDS=30*86400   # idle-eviction window bound; also rejects NaN/inf
+
 class ControlPlaneServer(ThreadingHTTPServer):
     def __init__(self,*args,**kwargs):
         self.stopping=threading.Event()
@@ -129,8 +131,10 @@ class API(BaseHTTPRequestHandler):
             if not write and path=='/api/models/idle':
                 if role!='admin': raise Problem('forbidden',403)
                 from urllib.parse import parse_qs
-                q=parse_qs(urlsplit(self.path).query)
-                idle=float(q.get('seconds',[3600])[0])
+                raw=parse_qs(urlsplit(self.path).query).get('seconds',['3600'])[0]
+                try: idle=float(raw)
+                except ValueError: raise Problem('seconds must be a number')
+                if not 0<=idle<=IDLE_MAX_SECONDS: raise Problem('seconds must be 0..%d'%IDLE_MAX_SECONDS)
                 return self.send(200,store.idle_deployments(idle))
             if not write and path.startswith('/api/logs/'):
                 if role=='agent': raise Problem('forbidden',403)
@@ -182,9 +186,10 @@ class API(BaseHTTPRequestHandler):
                 store.cancel_sweep(b['id'],actor.get('tenant') if role=='tenant' else None)
             elif path=='/api/models/evict-idle':
                 if role!='admin': raise Problem('forbidden',403)
-                seconds=b.get('seconds',3600)
-                if type(seconds) not in (int,float) or seconds<0: raise Problem('seconds must be non-negative')
-                cancelled=store.evict_idle(seconds, b.get('reason','idle eviction'))
+                seconds=b.get('seconds',3600); reason=b.get('reason','idle eviction')
+                if type(seconds) not in (int,float) or not 0<=seconds<=IDLE_MAX_SECONDS: raise Problem('seconds must be 0..%d'%IDLE_MAX_SECONDS)
+                if not isinstance(reason,str) or not 0<len(reason)<=200: raise Problem('reason must be 1..200 characters')
+                cancelled=store.evict_idle(seconds, reason)
                 return self.send(200,{'cancelled':cancelled,'count':len(cancelled)})
             elif path=='/api/suites':
                 if role!='admin': raise Problem('forbidden',403)
