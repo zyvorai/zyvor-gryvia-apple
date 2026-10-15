@@ -156,3 +156,15 @@ Changes and usage: [docs/FLEET-RELIABILITY.md](docs/FLEET-RELIABILITY.md).
   - Real Metal/MLX/llama.cpp workloads through the relay.
   - Critical-pressure cancellation under real memory pressure.
   - Browser tests (Playwright is not installed on the MacBook).
+
+## Idle eviction and capacity on the mini (16 October 2026, Mac mini macOS 27.2, Python 3.14.8)
+
+- **MacBook:** 199 Python tests passed. The new `tests/test_idle.py` deploys through the serve endpoint log and sends chat and stream requests through the real gateway. Against the original patch it fails 5 of 7 (busy and freshly deployed models were evicted), and it passes on the merged fix.
+- **Mac mini:** `make deploy` of `c2ee8a0` passed, including `verify.sh` with XCTest, `mac-smoke.sh`, launchd install, health and agent registration. On the live server:
+  - `GET /api/capacity` returned online 1, budget 8 GiB, reserved 0, `reservedPct` 0.
+  - `GET /api/models/idle` and `POST /api/models/evict-idle` (30-day window) returned empty, with nothing cancelled.
+  - `seconds=abc|nan|-1` and an empty `reason` returned 400.
+- **Not verified:**
+  - Evicting a real deployed model server on the mini (no model is deployed there).
+  - Non-admin 403 on the live server (covered by the unit tests only).
+  - GitHub CI: runs for PRs #11–#13 stayed queued, and those PRs merged without a CI result.
