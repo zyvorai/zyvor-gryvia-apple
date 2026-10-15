@@ -14,7 +14,7 @@
 | PyTorch MPS | Synchronized GPU benchmark wrapper, allocator hint | Python compile passes; MPS run pending |
 | Core ML | Numeric JSON prediction wrapper, framework chooses accelerators | Python compile passes; Core ML run pending |
 | Inference gateway | Non-streaming OpenAI-style chat, bounds, concurrency limits, least-busy replica | Real HTTP integration test against a mock worker passes |
-| Replica lifecycle | Run native model servers as managed jobs; administrator registers endpoint origins | No automatic readiness registration, autoscale or model eviction |
+| Replica lifecycle | Run native model servers as managed jobs; administrator registers endpoint origins; idle eviction via `/api/models/idle` + `/api/models/evict-idle` and capacity summary | Idle eviction and capacity unit-tested; automatic readiness / autoscale still not implemented |
 | Tenancy | Server-side ownership, bound agent identities, model tenant markings | Role and tenant isolation tests pass |
 | TLS | Mandatory for external bind; Swift rejects remote plaintext origins | Client test source and server configuration supplied |
 | Allocation metering | Per-attempt worker seconds and reserved GiB-seconds | Unit test passes; not GPU-utilization billing |

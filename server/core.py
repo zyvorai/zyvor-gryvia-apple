@@ -442,12 +442,15 @@ class Store:
             if state in ('succeeded','failed','cancelled'): self.job_followup(ident,state=='succeeded',node,att)
         self.tx(run)
     def cancel(self,ident,tenant=None):
-        def run():
-            j=self.db.execute('SELECT * FROM jobs WHERE id=?',(ident,)).fetchone()
-            if not j or (tenant and tenant!=j['tenant']): raise Problem('job not found',404)
-            if j['state'] in ['queued','running']:
-                self.db.execute('UPDATE jobs SET state=?,finished=? WHERE id=?',('cancelled' if j['state']=='queued' else 'cancelling',self.clock() if j['state']=='queued' else None,ident)); self.event('job.cancel',ident); self.decide(ident,j['node'],'cancel','cancel requested')
-        self.tx(run)
+        self.tx(lambda: self._cancel_locked(ident,tenant))
+    def _cancel_locked(self,ident,tenant=None,detail='cancel requested'):
+        # Caller holds the transaction; lets evict_idle decide and cancel atomically.
+        j=self.db.execute('SELECT * FROM jobs WHERE id=?',(ident,)).fetchone()
+        if not j or (tenant and tenant!=j['tenant']): raise Problem('job not found',404)
+        if j['state'] in ['queued','running']:
+            self.db.execute('UPDATE jobs SET state=?,finished=? WHERE id=?',('cancelled' if j['state']=='queued' else 'cancelling',self.clock() if j['state']=='queued' else None,ident)); self.event('job.cancel',ident); self.decide(ident,j['node'],'cancel',detail)
+            return True
+        return False
     def log(self,node,ident,lease,line):
         self.logs(node,ident,lease,[line])
     def logs(self,node,ident,lease,lines):
@@ -836,3 +839,41 @@ class Store:
                 j['spec']=json.loads(j.pop('body')); j['result']=json.loads(j['result']); j.pop('lease'); jobs.append(j)
             return {'jobs':jobs,'nodes':[] if tenant else [dict(id=r['id'],seen=r['seen'],drain=bool(r['drain']),online=self.clock()-r['seen']<=30,policy=self.node_policy(r['id']),gate=dict(zip(('allowed','reason'),policy_gate(self.node_policy(r['id']),json.loads(r['body']).get('presence')))),**json.loads(r['body'])) for r in self.db.execute('SELECT * FROM nodes')], 'tenants':[dict(r) for r in self.db.execute('SELECT * FROM tenants') if not tenant or r['id']==tenant], 'models':[dict(id=r['id'],**json.loads(r['body'])) for r in self.db.execute('SELECT * FROM models') if not tenant or not json.loads(r['body']).get('tenants') or tenant in json.loads(r['body'])['tenants']], 'events':[dict(r) for r in self.db.execute('SELECT * FROM events ORDER BY seq DESC LIMIT 100')] if not tenant else [], 'usage':[dict(r,kWh=round((r['joules'] or 0)/3.6e6,6)) for r in self.db.execute('SELECT tenant,SUM(seconds) AS workerSeconds,SUM(gibSeconds) AS reservedGiBSeconds,SUM(joules) AS joules FROM usage GROUP BY tenant') if not tenant or r['tenant']==tenant], 'decisions':[] if tenant else self.recent_decisions(40),'datasets':[dict(id=r['id'],**json.loads(r['body'])) for r in self.db.execute('SELECT * FROM datasets')],'workflows':[dict(id=r['id'],at=r['at'],**json.loads(r['body'])) for r in self.db.execute('SELECT * FROM workflows ORDER BY at DESC LIMIT 50') if not tenant or json.loads(r['body'])['tenant']==tenant],'sweeps':[dict(id=r['id'],at=r['at'],**json.loads(r['body'])) for r in self.db.execute('SELECT * FROM sweeps ORDER BY at DESC LIMIT 20') if not tenant or json.loads(r['body'])['tenant']==tenant],'time':self.clock()}
         return self.tx(run)
+    def last_activity_at(self, model_id):
+        """Latest gateway request (completed or streamed) or deployment for this model, or None.
+        The gateway records inference events as (kind, tenant, model), so the model is in detail."""
+        row=self.db.execute("SELECT MAX(at) AS a FROM events WHERE (kind IN ('inference.completed','inference.streamed') AND detail=?) OR (kind='model.deployed' AND subject=?)",(model_id,model_id)).fetchone()
+        return row['a'] if row and row['a'] is not None else None
+    def _idle_locked(self, idle_seconds):
+        now=self.clock(); out=[]
+        for row in self.db.execute('SELECT id, body FROM models').fetchall():
+            m=json.loads(row['body'])
+            if m.get('status')!='deployed' or not m.get('endpoints'): continue
+            last=self.last_activity_at(row['id'])
+            idle=now-(last or m.get('updated') or 0)
+            if idle>idle_seconds:
+                out.append(dict(id=row['id'], last=last, idle=round(idle,1), endpoints=list(m['endpoints']), deployJob=m.get('deployJob')))
+        return out
+    def idle_deployments(self, idle_seconds=3600):
+        """Deployed models with no gateway traffic or deployment within idle_seconds."""
+        return self.tx(lambda: self._idle_locked(idle_seconds))
+    def evict_idle(self, idle_seconds=3600, reason='idle eviction'):
+        """Cancel serve jobs of models idle longer than the threshold; decided and applied in one
+        transaction so a request recorded meanwhile cannot be evicted. Returns cancelled job ids."""
+        def run():
+            cancelled=[]
+            idle={item['id'] for item in self._idle_locked(idle_seconds)}
+            if not idle: return cancelled
+            for j in self.db.execute("SELECT id, body FROM jobs WHERE state IN ('queued','running')").fetchall():
+                spec=json.loads(j['body'])
+                if spec.get('kind')=='serve' and spec.get('modelId') in idle and self._cancel_locked(j['id'],detail=reason):
+                    cancelled.append(j['id']); self.event('model.evict_idle', spec['modelId'], reason+' '+j['id'])
+            return cancelled
+        return self.tx(run)
+    def capacity_summary(self):
+        """Compact capacity picture. reservedPct is reservation bookkeeping, not measured GPU utilisation."""
+        with self.lock: t=self.fleet_totals()
+        free=max(0.0, t['budget']-t['reserved'])
+        return dict(online=t['online'], budgetGiB=t['budget'], reservedGiB=round(t['reserved'],2), freeGiB=round(free,2),
+                    queued=t['states']['queued'], running=t['states']['running'],
+                    reservedPct=round(100*t['reserved']/t['budget'],1) if t['budget'] else 0)
