@@ -4,6 +4,8 @@
 """Core ML adapter for numeric JSON inputs. Accelerator choice remains Core ML's."""
 import argparse,json,time
 
+from _common import verify_inputs  # input checks run when the helpers load
+
 def main():
     p=argparse.ArgumentParser();p.add_argument('--model',required=True);p.add_argument('--inputs',required=True);a=p.parse_args()
     import coremltools as ct

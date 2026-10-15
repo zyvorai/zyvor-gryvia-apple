@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import confine, emit, mlx_python, models_root, run_group  # noqa: E402
+from _common import confine, emit, mlx_python, models_root, run_group, artifact_digest  # noqa: E402
 
 
 def main(argv=None) -> int:
@@ -31,7 +31,7 @@ def main(argv=None) -> int:
         emit(kind="error", message=(r.stderr or r.stdout)[-400:])
         return r.returncode or 1
     size = sum(f.stat().st_size for f in out.rglob("*") if f.is_file())
-    emit(kind="result", path=str(out), bytes=size, parent=model, adapter=str(adapter))
+    emit(kind="result", path=str(out), sha256=artifact_digest(out), artifactType="directory", bytes=size, parent=model, adapter=str(adapter))
     return 0
 
 

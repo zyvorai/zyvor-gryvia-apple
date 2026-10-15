@@ -4,6 +4,8 @@
 """Bounded native MLX generation with allocator hints and measured token throughput."""
 import argparse,json,os,time
 
+from _common import verify_inputs  # input checks run when the helpers load
+
 def parser():
     p=argparse.ArgumentParser();p.add_argument('--model',required=True);p.add_argument('--prompt',required=True);p.add_argument('--max-tokens',type=int,default=256);return p
 

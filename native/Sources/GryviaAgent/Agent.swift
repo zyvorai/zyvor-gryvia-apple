@@ -46,6 +46,8 @@ struct Config: Decodable {
         func note(_ lines:[String]) { for l in lines where l.hasPrefix("{\"kind\": \"result\"") { resultLine=l } }
         var success=false; var detail=""; var exitCode:Int32 = -1
         let started=Date()
+        let relayTask: Task<Void, Never>? = job.spec.kind == "serve" ? Task { await InferenceRelay.run(api: api, job: job) } : nil
+        defer { relayTask?.cancel() }
         do {
             guard let runtime=config.runtimes[job.spec.runtime] else { throw GryviaError.invalid("Runtime not enabled") }
             let (exe,args)=try runtime.command(job.spec)
@@ -54,6 +56,11 @@ struct Config: Decodable {
             env.removeValue(forKey:"GRYVIA_AGENT_TOKEN"); env.removeValue(forKey:"GRYVIA_ADMIN_TOKEN")
             env["GRYVIA_MEMORY_RESERVATION_GIB"]=String(job.spec.memoryGiB)
             if let gib=Hardware.report(budget:config.budgetGiB,runtimes:[])["metalWorkingSetGiB"] as? Double { env["GRYVIA_METAL_WORKING_SET_BYTES"]=String(gib*pow(1024,3)) }
+            env.removeValue(forKey: "GRYVIA_INPUT_MANIFEST")
+            if let inputs = job.spec.inputs {
+                env["GRYVIA_INPUT_MANIFEST"] = String(decoding: try JSONEncoder().encode(inputs), as: UTF8.self)
+            }
+            env["GRYVIA_AGENT_RELAY"]="1"
             env["GRYVIA_JOB_ID"]=job.id; p.environment=env
             let dir=FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Gryvia/jobs/\(job.id)")
             try FileManager.default.createDirectory(at:dir,withIntermediateDirectories:true); p.currentDirectoryURL=dir

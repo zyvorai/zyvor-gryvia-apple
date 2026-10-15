@@ -1,12 +1,25 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: BUSL-1.1
 # Copyright © 2026 Zyvor AI Labs Private Limited
-import argparse, json, os, secrets, ssl
+import argparse, json, os, secrets, ssl, threading
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlsplit
 from server.core import Store, Problem
 from server.inference import Gateway
+from server.relay import AgentRelay
+
+class ControlPlaneServer(ThreadingHTTPServer):
+    def __init__(self,*args,**kwargs):
+        self.stopping=threading.Event()
+        super().__init__(*args,**kwargs)
+    def shutdown(self):
+        self.stopping.set()
+        super().shutdown()
+    def server_close(self):
+        self.stopping.set()
+        super().server_close()
+
 
 class API(BaseHTTPRequestHandler):
     def log_message(self,*args): pass
@@ -33,13 +46,13 @@ class API(BaseHTTPRequestHandler):
         """Server-Sent Events: one JSON state snapshot per `interval` seconds, bounded to `limit` frames (clients reconnect)."""
         self.send_response(200); self.send_header('Content-Type','text/event-stream'); self.send_header('Cache-Control','no-store')
         self.send_header('X-Accel-Buffering','no'); self.end_headers()
-        import time as _t
         try:
             for i in range(limit):
+                if self.server.stopping.is_set(): break
                 snap=store.snapshot(tenant)
                 if admin: snap['telemetry']=store.telemetry(60)
                 self.wfile.write(b'data: '+json.dumps(snap).encode()+b'\n\n'); self.wfile.flush()
-                _t.sleep(interval)
+                if self.server.stopping.wait(interval): break
         except (BrokenPipeError,ConnectionResetError,OSError): pass
         self.close_connection=True
     def do_GET(self): self.handle_request(False)
@@ -58,6 +71,11 @@ class API(BaseHTTPRequestHandler):
                     self.end_headers()
                     try:
                         for c in chunks: self.wfile.write(c); self.wfile.flush()
+                    except Problem:
+                        # Headers have already been sent: signal a failed SSE stream without writing a second HTTP response.
+                        try:
+                            self.wfile.write(b'event: error\ndata: {"error":"inference stream failed"}\n\ndata: [DONE]\n\n'); self.wfile.flush()
+                        except OSError: pass
                     except (BrokenPipeError,ConnectionResetError,OSError): pass
                     finally: chunks.close()
                     self.close_connection=True
@@ -113,6 +131,9 @@ class API(BaseHTTPRequestHandler):
                 return self.send(200,rows)
             if not write: raise Problem('not found',404)
             b=self.body()
+            if path=='/api/fit':
+                if role not in ['admin','tenant']: raise Problem('forbidden',403)
+                return self.send(200,store.fit(b,actor.get('tenant','default')))
             if path=='/api/jobs':
                 if role not in ['admin','tenant']: raise Problem('forbidden',403)
                 tenant=actor['tenant'] if role=='tenant' else b.pop('tenant','default')
@@ -120,6 +141,9 @@ class API(BaseHTTPRequestHandler):
             if path=='/api/cancel':
                 if role not in ['admin','tenant']: raise Problem('forbidden',403)
                 store.cancel(b['id'],actor.get('tenant') if role=='tenant' else None)
+            elif path=='/api/artifacts/stage':
+                if role!='admin': raise Problem('forbidden',403)
+                store.stage_artifact(b)
             elif path=='/api/models/onboard':
                 if role!='admin': raise Problem('forbidden',403)
                 return self.send(201,{'job':store.onboard(b.pop('tenant','default'),b)})
@@ -169,6 +193,8 @@ class API(BaseHTTPRequestHandler):
                 elif op=='complete':
                     if type(b['success']) is not bool: raise Problem('success must be boolean')
                     store.complete(node,b['id'],b['lease'],b['success'],b.get('result',{}),b.get('attestation'))
+                elif op=='relay-poll': return self.send(200,{'request':self.server.relay.poll(node,b['id'],b['lease'])})
+                elif op=='relay-push': self.server.relay.push(node,b['id'],b['lease'],b)
                 elif op=='logs': store.logs(node,b['id'],b['lease'],b['lines'])
                 elif op=='log': store.log(node,b['id'],b['lease'],b['text'])
                 else: raise Problem('not found',404)
@@ -179,8 +205,8 @@ class API(BaseHTTPRequestHandler):
         except Exception: self.send(500,{'error':'internal error'})
 
 def make_server(store,tokens,host='127.0.0.1',port=8443):
-    server=ThreadingHTTPServer((host,port),API); server.store=store; server.tokens=tokens
-    server.web=Path(__file__).resolve().parents[1]/'web'; server.gateway=Gateway(); return server
+    server=ControlPlaneServer((host,port),API); server.store=store; server.tokens=tokens
+    server.web=Path(__file__).resolve().parents[1]/'web'; server.relay=AgentRelay(store); server.gateway=Gateway(relay=server.relay); return server
 
 def main():
     p=argparse.ArgumentParser(); p.add_argument('--config',default='config.json'); p.add_argument('--db',default='gryvia.db'); p.add_argument('--host',default='127.0.0.1'); p.add_argument('--port',type=int,default=8443); p.add_argument('--cert'); p.add_argument('--require-verified',action='store_true',help='refuse serve/benchmark/evaluate/quantize/fuse on models without verified provenance'); p.add_argument('--inference-loopback',action='store_true',help='allow model replicas registered on 127.0.0.1 (serve jobs on the control-plane Mac)'); p.add_argument('--key'); a=p.parse_args()
@@ -193,7 +219,8 @@ def main():
     if a.host not in ['127.0.0.1','localhost','::1'] and not (a.cert and a.key): p.error('remote bind requires --cert and --key')
     server=make_server(Store(a.db),tokens,a.host,a.port)
     server.store.require_verified=a.require_verified or bool(config.get('requireVerified',False))
-    server.gateway=Gateway(config.get("inferenceOrigins",[]),config.get("inferenceConcurrencyPerTenant",2),allow_loopback=a.inference_loopback or bool(config.get("inferenceAllowLoopback",False)))
+    server.store.require_verified_chain=bool(config.get('requireVerifiedChain',False))
+    server.gateway=Gateway(config.get("inferenceOrigins",[]),config.get("inferenceConcurrencyPerTenant",2),relay=server.relay,allow_loopback=a.inference_loopback or bool(config.get("inferenceAllowLoopback",False)))
     if a.cert:
         ctx=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); ctx.minimum_version=ssl.TLSVersion.TLSv1_2; ctx.load_cert_chain(a.cert,a.key); server.socket=ctx.wrap_socket(server.socket,server_side=True)
     print('Gryvia Apple listening on',a.host,a.port,flush=True)

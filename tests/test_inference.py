@@ -7,6 +7,9 @@ from server.core import Store,Problem
 class Worker(BaseHTTPRequestHandler):
     def log_message(self,*a):pass
     def do_POST(self):
+        try: self.respond()
+        except (BrokenPipeError,ConnectionResetError): pass  # expected in byte-bound and client-close scenarios
+    def respond(self):
         body=json.loads(self.rfile.read(int(self.headers['Content-Length'])));self.server.seen=(dict(self.headers),body)
         if body.get('stream'):
             self.send_response(200);self.send_header('Content-Type','text/event-stream');self.end_headers()

@@ -16,7 +16,7 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import confine, emit, find_tool, mlx_python  # noqa: E402
+from _common import confine, emit, find_tool, mlx_python, ManagedProcess  # noqa: E402
 
 
 def free_port() -> int:
@@ -42,7 +42,8 @@ def main(argv=None) -> int:
             emit(kind="error", message=f"model file not found: {model}")
             return 1
         cmd = [find_tool("llama-server"), "-m", str(model), "--host", "127.0.0.1", "--port", str(port), "-c", str(a.ctx)]
-    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    managed = ManagedProcess(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    proc = managed.proc
     stop = {"now": False}
     signal.signal(signal.SIGTERM, lambda *_: stop.update(now=True))
     signal.signal(signal.SIGINT, lambda *_: stop.update(now=True))
@@ -58,20 +59,17 @@ def main(argv=None) -> int:
         except OSError:
             time.sleep(0.5)
     if not ready:
-        proc.terminate()
+        managed.close()
         emit(kind="error", message="llama-server did not become healthy")
         return 1
-    emit(kind="endpoint", url=url)
+    emit(kind="endpoint", url=url, agentRelay=os.getenv("GRYVIA_AGENT_RELAY") == "1")
     parent = os.getppid()
     # If the agent that launched us goes away (restart, crash) we are re-parented: stop instead of leaking a server.
     while not stop["now"] and proc.poll() is None and os.getppid() == parent:
         time.sleep(0.5)
-    proc.terminate()
-    try:
-        proc.wait(10)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-    return 0
+    failed = proc.poll() is not None and proc.returncode != 0
+    managed.close()
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

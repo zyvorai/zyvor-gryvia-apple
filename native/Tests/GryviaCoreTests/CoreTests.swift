@@ -94,3 +94,17 @@ final class PowerFileTests: XCTestCase {
         XCTAssertNil(PowerFile.read(path: absurd, now: now))
     }
 }
+
+final class MemoryPressureTests: XCTestCase {
+    func testPressureSeverity() {
+        XCTAssertEqual(MemoryPressureMonitor.label(critical: true, warning: true), "critical")
+        XCTAssertEqual(MemoryPressureMonitor.label(critical: false, warning: true), "warning")
+        XCTAssertEqual(MemoryPressureMonitor.label(critical: false, warning: false), "normal")
+    }
+    func testReportKeepsUnknownDistinctFromNormal() {
+        let report = MemoryPressureMonitor.shared.report()
+        XCTAssertTrue(["normal", "warning", "critical", "unknown"].contains(report["pressure"] as? String ?? ""))
+        XCTAssertEqual(report["memoryHeadroomGiB"] as? Double, 1)
+        if let available = report["availableGiB"] as? Double { XCTAssertGreaterThanOrEqual(available, 0) }
+    }
+}

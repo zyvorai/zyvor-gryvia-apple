@@ -175,7 +175,7 @@ except OSError:
     pass
 LICENSE_LINE = "Gryvia Apple " + VERSION + " · BUSL-1.1 · Copyright © 2026 Zyvor AI Labs Private Limited"
 ZSH_COMPLETION = """#compdef gryvia.py gryvia
-_arguments '--server=[server origin]' '--json[raw JSON output]' '--output=[table|json|csv]' '1:command:(status top nodes policy jobs models provenance rekey fuse datasets dataset-add train sweep sweep-status sweep-cancel metrics-run deploy undeploy onboard bench eval results submit cancel priority logs drain tenant metrics quickstart doctor completion)'
+_arguments '--server=[server origin]' '--json[raw JSON output]' '--output=[table|json|csv]' '1:command:(fit stage status top nodes policy jobs models provenance rekey fuse datasets dataset-add train sweep sweep-status sweep-cancel metrics-run deploy undeploy onboard bench eval results submit cancel priority logs drain tenant metrics quickstart doctor completion)'
 """
 
 
@@ -225,6 +225,13 @@ def build_parser():
     p.add_argument("--output", choices=["table", "json", "csv"], help="output format (default: table on a terminal, JSON when piped)")
     p.add_argument("--version", action="version", version=LICENSE_LINE)
     sub = p.add_subparsers(dest="op", required=True)
+    s = sub.add_parser("stage", help="register a locally staged model/dataset copy after hashing it")
+    s.add_argument("kind", choices=["model","dataset"]); s.add_argument("id"); s.add_argument("--node", required=True); s.add_argument("--path", required=True)
+    s = sub.add_parser("fit", help="estimate inference memory and explain which Macs fit")
+    s.add_argument("--model", dest="modelId"); s.add_argument("--params-b", type=float, dest="paramsB")
+    s.add_argument("--quant")
+    for flag, key, default in [("context-tokens","contextTokens",4096),("concurrency","concurrency",1),("kv-layers","kvLayers",32),("kv-heads","kvHeads",8),("head-dim","headDim",128),("kv-bytes","kvBytes",2)]:
+        s.add_argument("--"+flag, type=int, dest=key, default=default)
     s = sub.add_parser("status"); s.add_argument("-w", "--watch", action="store_true")
     s = sub.add_parser("submit"); s.add_argument("file"); s.add_argument("--wait", action="store_true", help="block until the job finishes")
     s = sub.add_parser("cancel"); s.add_argument("id")
@@ -260,7 +267,7 @@ def build_parser():
     s.add_argument("--iters", type=int, default=100); s.add_argument("--memory-gib", type=float, default=6); s.add_argument("--name", default="sweep")
     s = sub.add_parser("sweep-status", help="rank the runs of a sweep by validation loss"); s.add_argument("id", nargs="?", help="sweep id (default: newest)")
     s = sub.add_parser("sweep-cancel", help="cancel every unfinished run of a sweep"); s.add_argument("id")
-    s = sub.add_parser("deploy", help="serve a ready GGUF model with llama-server"); s.add_argument("model")
+    s = sub.add_parser("deploy", help="serve a ready model on its producing Mac or a staged copy"); s.add_argument("model"); s.add_argument("--node")
     s = sub.add_parser("undeploy", help="stop a deployment"); s.add_argument("model")
     s = sub.add_parser("provenance", help="show the signed provenance chain of a model"); s.add_argument("model")
     s = sub.add_parser("rekey", help="forget a Mac's pinned signing key (after reinstalling the agent)"); s.add_argument("node")
@@ -286,6 +293,19 @@ def run(args) -> int:
     if not token:
         raise CliError(f"missing token: set {args.token_env}, pass --token-file, or store it in the Keychain (service dev.zyvor.gryvia.admin)")
     c = Client(args.server, token)
+    if args.op == "stage":
+        from pathlib import Path
+        sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"runtimes"))
+        from _common import confine, artifact_digest
+        path=confine(args.path)
+        emit(c.call("artifacts/stage",dict(kind=args.kind,id=args.id,node=args.node,path=str(path),sha256=artifact_digest(path))),args)
+        return 0
+    if args.op == "fit":
+        body={k:getattr(args,k) for k in ("modelId","paramsB","quant","contextTokens","concurrency","kvLayers","kvHeads","headDim","kvBytes") if getattr(args,k) is not None}
+        result=c.call("fit",body)
+        emit(result,args,lambda r: f"Estimated {r['estimatedGiB']:.1f} GiB (weights {r['weightsGiB']:.2f}, KV cache {r['kvCacheGiB']:.2f})\n" +
+             table(["MAC","FITS","AVAILABLE GiB","REASON"],[(n['node'],"yes" if n['fits'] else "no",n['availableGiB'],n['reason']) for n in r['nodes']]) + "\n" + r['warning'])
+        return 0
     if args.op == "doctor":
         return doctor(c)
     if args.op == "quickstart":
@@ -427,9 +447,9 @@ def run(args) -> int:
         if m.get("endpoints"):
             raise CliError(f"already deployed at {m['endpoints'][-1]}; `gryvia.py undeploy {m['id']}` first")
         spec = {"runtime": "serve", "kind": "serve", "modelId": m["id"], "model": f"serve {m['id']}", "memoryGiB": max(1.0, m["memoryGiB"]), "priority": 70,
-                "mode": "shared", "retries": 0, "timeoutSeconds": 604800, "args": ["--model", m["path"]] + (["--engine", "mlx"] if m.get("runtime") == "mlx" else []), "labels": ["serve"]}
-        if m.get("node"):
-            spec["node"] = m["node"]
+                "mode": "shared", "retries": 0, "timeoutSeconds": 604800, "args": ["--model", "{{model.path}}"] + (["--engine", "mlx"] if m.get("runtime") == "mlx" else []), "labels": ["serve"]}
+        if args.node or m.get("node"):
+            spec["node"] = args.node or m["node"]
         emit(c.call("jobs", spec), args, lambda j: f'deploying: job {j["id"][:10]}; endpoint appears in `gryvia.py models`')
         return 0
     if args.op == "provenance":
