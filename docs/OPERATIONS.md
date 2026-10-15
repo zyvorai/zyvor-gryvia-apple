@@ -28,7 +28,25 @@ Stop the server before copying its database, or use SQLite's backup API. Preserv
 
 Allowlist origins in the control-plane configuration. Only administrators may register endpoints. The gateway performs least-in-flight selection, not performance prediction, automatic failover or health-based removal. It never forwards platform bearer tokens. Connect remote workers through a secured private network or tunnel. Avoid publicly exposing unauthenticated model servers.
 
-The concurrency cap is per authenticated tenant. Administrator requests use the default tenant. Model markings apply to both tenant and administrator inference calls. Text requests have bounded message count, character count and max output tokens. Streaming and tools/function calls are not forwarded in this release.
+The concurrency cap is per authenticated tenant. Administrator requests use the default tenant. Model markings apply to both tenant and administrator inference calls. Text requests have bounded message count, character count and max output tokens. Streaming (`"stream": true`, SSE) is forwarded. Tools/function calls are not: the gateway forwards only `model`, `messages`, `max_tokens` and `stream`.
+
+Managed deployments from a current agent use the outbound relay. The model server stays on the worker's loopback, and the agent carries requests and responses over its own authenticated polling connection, so no worker port or origin allowlist entry is needed. Older agents keep the allowlisted direct-HTTP path. Upgrade the controller and agents together.
+
+## Idle eviction and capacity
+
+Deployed models keep their reservation until their serve job ends. To free memory held by replicas nobody is using, list and evict them. Both calls are administrator-only:
+
+```bash
+curl -fsS -H "Authorization: Bearer $GRYVIA_ADMIN_TOKEN" 'http://127.0.0.1:8443/api/models/idle?seconds=3600'
+curl -fsS -H "Authorization: Bearer $GRYVIA_ADMIN_TOKEN" -H 'Content-Type: application/json' \
+     -d '{"seconds": 3600, "reason": "nightly idle sweep"}' http://127.0.0.1:8443/api/models/evict-idle
+curl -fsS -H "Authorization: Bearer $GRYVIA_ADMIN_TOKEN" http://127.0.0.1:8443/api/capacity
+```
+
+- **What counts as idle:** a model is idle when no gateway request (completed or streamed) and no deployment for it has been recorded within `seconds` (0 to 30 days). Traffic that bypasses the gateway, such as direct calls to a worker's loopback port, is not seen.
+- **What eviction does:** it cancels the model's serve jobs, the same as `undeploy`. The reservation is released when the agent acknowledges. The model returns to `ready`, and later requests get 503 until it is deployed again. The next request does not redeploy it automatically.
+- **No automatic schedule:** nothing evicts by itself. To sweep on a schedule, run the POST from cron or launchd.
+- **Capacity numbers:** `/api/capacity` reports online nodes, budget/reserved/free GiB and queued/running counts. `reservedPct` is reservations divided by budget, not measured GPU utilisation.
 
 ## Hardware acceptance checklist
 

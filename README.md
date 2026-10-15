@@ -37,7 +37,7 @@
 
 ## What is in the box
 
-- **Control plane** (`server/`): Python standard library + SQLite. Priority, fairness, quotas, dependencies, retries, leases, yield-and-resume, model registry, results, provenance, OpenAI-style gateway with streaming, Prometheus `/metrics`.
+- **Control plane** (`server/`): Python standard library + SQLite. Priority, fairness, quotas, dependencies, retries, leases, yield-and-resume, model registry, results, provenance, OpenAI-style gateway with streaming over an outbound agent relay, idle-deployment eviction and a capacity summary, Prometheus `/metrics`.
 - **Agent** (`native/Sources/GryviaAgent`): Swift. Reports GPU model, core count and measured utilisation (IORegistry), memory, thermal state, owner presence and power; runs locally configured runtimes; signs attestations.
 - **Apps**: web dashboard (`web/`, also the static demo), SwiftUI Mac app with menu-bar pause and Dock badge, CLI (`scripts/gryvia.py`), MCP server (`mcp/`).
 - **Runtimes** (`runtimes/`): llama.cpp (bench, evaluate, quantise, serve), MLX (LoRA, fuse, serve, generate), Core ML, Hugging Face download with size cap and SHA-256.
@@ -61,7 +61,9 @@ One GPU per Mac; GPU utilisation is device-wide, not per job; reservations are a
 
 ## Fleet reliability additions
 
-Outbound agent inference relay, staged artifact locations with input checksums, live memory-pressure admission, a model-fit advisor, safer subprocess cleanup and seeded training splits are described in [Fleet reliability](docs/FLEET-RELIABILITY.md). See its validation limits before deploying the new native components.
+Outbound agent inference relay, staged artifact locations with input checksums, live memory-pressure admission, a model-fit advisor, safer subprocess cleanup and seeded training splits are described in [Fleet reliability](docs/FLEET-RELIABILITY.md). They are built and tested on macOS 27.2 and run on a Mac mini. Relay between two physical Macs is not yet measured; see that page's validation status.
+
+**Idle eviction.** `GET /api/models/idle` lists deployments with no gateway traffic within a window, and `POST /api/models/evict-idle` stops them to free their memory reservation. It is operator-triggered, with no autoscaler. `GET /api/capacity` gives the free and reserved GiB picture. See [Operations](docs/OPERATIONS.md#idle-eviction-and-capacity).
 
 ## Where it fits
 

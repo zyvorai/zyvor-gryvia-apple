@@ -14,6 +14,26 @@ This change set builds on 0.3.0. It adds controller/agent plumbing and regressio
 - `requireVerifiedChain` optionally enforces a complete signed chain at submission and again at claim. Artifact-producing attestations must contain a signed result digest, and signed success must agree with completion. Download/adapter/fused/quantized outputs carry hashes where produced by the bundled wrappers. This does not establish trust against a compromised worker administrator.
 - SwiftUI workload rows/menu are split into smaller expressions to address the type-check timeout observed in main CI. A CPU-only native relay smoke is added to macOS CI.
 
+## Validation status (15 October 2026)
+
+- **Verified on macOS 27.2 (MacBook and Mac mini, Swift 6.4, Python 3.14):**
+  - `make verify`: Python suite, XCTest including memory pressure, release build.
+  - `mac-smoke.sh` and `native-relay-smoke.py`.
+  - A launchd deployment on the mini.
+  - Real `llama-server` chat requests through the outbound relay on the mini.
+- **Fixed during that validation** (the Linux review could not see these):
+  - A Swift 6 concurrency error in `MemoryPressure.swift`.
+  - Process-group cleanup exiting 1 instead of 143 on macOS: `killpg(…, 0)` returns EPERM once only exited, unreaped members remain.
+  - A `/private/var` path assertion in the tests.
+- **Not yet verified:**
+  - Relay and staging between two physical Macs.
+  - MLX serving through the relay.
+  - Critical memory pressure on real hardware.
+  - Controller restart and agent termination during a relayed stream.
+  - Optimizer/RNG resume, which is not implemented.
+
+Details and commands are in [TEST_RESULTS.md](../TEST_RESULTS.md).
+
 ## Usage
 
 Inspect memory fit (replace KV dimensions with the model's actual architecture):
@@ -71,4 +91,4 @@ The last command uses a real Swift agent and a mock local model server, not an M
 
 ## Explicit follow-on work
 
-Automatic artifact copying/cache eviction, desired-replica reconciliation/autoscaling, rolling replacement and owner-triggered service handoff, durable host-wide orphan reconciliation/epoch fencing, per-job RSS telemetry, full optimizer/RNG checkpoint resume, model-quality promotion gates and distributed MLX gang execution are **not implemented** here. This release still has one managed serve job per model and one execution slot per native agent. MLX tensor/pipeline parallelism, JACCL/RDMA and numerical GPU behavior require separate implementation and physical-fleet qualification.
+Operator-triggered idle eviction of deployments now exists (`/api/models/idle`, `/api/models/evict-idle`; see [OPERATIONS.md](OPERATIONS.md#idle-eviction-and-capacity)). Automatic artifact copying/cache eviction, desired-replica reconciliation/autoscaling, rolling replacement and owner-triggered service handoff, durable host-wide orphan reconciliation/epoch fencing, per-job RSS telemetry, full optimizer/RNG checkpoint resume, model-quality promotion gates and distributed MLX gang execution are **not implemented** here. This release still has one managed serve job per model and one execution slot per native agent. MLX tensor/pipeline parallelism, JACCL/RDMA and numerical GPU behavior require separate implementation and physical-fleet qualification.
