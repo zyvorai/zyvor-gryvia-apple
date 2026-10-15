@@ -142,3 +142,17 @@ Changes and usage: [docs/FLEET-RELIABILITY.md](docs/FLEET-RELIABILITY.md).
 - The original process-group test used a fixed delay and `pgrep`; it failed in the untouched baseline in this environment. It now waits for a child-written PID readiness marker and verifies reaping, and an additional test verifies escalation against a child that ignores SIGTERM.
 - Definitive command output and pass counts are in the ZIP's `validation/` directory. Earlier entries in this file describe prior work and are not fresh measurements from this PR.
 - Final validation for this PR: **192 Python tests passed in 34.822 s** (Python 3.12.14 on Linux). Compilation, JavaScript syntax, source headers, version consistency, shell syntax and `git diff --check` passed. Python 3.14 CI, Swift/XCTest, the new native relay smoke and real GPU/fleet validation remain pending. The final suite emitted no uncaught request-handler tracebacks after shutdown and mock-disconnect handling were corrected.
+
+## Fleet reliability on macOS (15 October 2026, MacBook macOS 27.2 + Mac mini macOS 27.2, Swift 6.4, Python 3.14)
+
+- **MacBook:** `make verify` passed (192 Python tests, 21 XCTest including `MemoryPressureTests`, release build), as did `scripts/mac-smoke.sh` and `scripts/native-relay-smoke.py`. The run found three macOS-only problems that the Linux review could not see, all fixed in PR #11:
+  - `MemoryPressure.swift` did not compile under Swift 6.
+  - The process-group SIGTERM test failed 15 of 25 runs. Darwin returns EPERM from `killpg(pgid, 0)` once only exited, unreaped members remain.
+  - A `/var` vs `/private/var` path assertion failed.
+- **Mac mini:** `make deploy` passed. It ran `verify.sh` with full Xcode and XCTest, then `mac-smoke.sh`, installed the launchd server and agent, passed the health check and saw the agent register. On the deployed tree, `native-relay-smoke.py` (JSON + SSE, no token forwarding) also passed, `gryvia.py fit --params-b 8 --quant q4 --context-tokens 4096` returned an estimate, and the logs showed no errors. The node's memory pressure read `unknown` until the first OS pressure event, as documented.
+- **Not verified:**
+  - GitHub CI for PR #11: the run sat queued and the PR was merged before any job ran.
+  - Relay or staging between two physical Macs.
+  - Real Metal/MLX/llama.cpp workloads through the relay.
+  - Critical-pressure cancellation under real memory pressure.
+  - Browser tests (Playwright is not installed on the MacBook).
