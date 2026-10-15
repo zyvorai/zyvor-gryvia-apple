@@ -6,6 +6,6 @@
     "test:web": "bash scripts/browser-test.sh"
   },
   "devDependencies": {
-    "playwright": "1.62.1"
+    "playwright": "1.64.0"
   }
 }
