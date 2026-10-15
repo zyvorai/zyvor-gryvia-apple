@@ -123,6 +123,15 @@ class API(BaseHTTPRequestHandler):
                 if role!='admin': raise Problem('forbidden',403)
                 store.sample(0)
                 return self.send(200,store.history())
+            if not write and path=='/api/capacity':
+                if role!='admin': raise Problem('forbidden',403)
+                return self.send(200,store.capacity_summary())
+            if not write and path=='/api/models/idle':
+                if role!='admin': raise Problem('forbidden',403)
+                from urllib.parse import parse_qs
+                q=parse_qs(urlsplit(self.path).query)
+                idle=float(q.get('seconds',[3600])[0])
+                return self.send(200,store.idle_deployments(idle))
             if not write and path.startswith('/api/logs/'):
                 if role=='agent': raise Problem('forbidden',403)
                 ident=path.split('/')[-1]; state=store.snapshot(actor.get('tenant') if role=='tenant' else None)
@@ -171,6 +180,12 @@ class API(BaseHTTPRequestHandler):
             elif path=='/api/sweeps/cancel':
                 if role not in ['admin','tenant']: raise Problem('forbidden',403)
                 store.cancel_sweep(b['id'],actor.get('tenant') if role=='tenant' else None)
+            elif path=='/api/models/evict-idle':
+                if role!='admin': raise Problem('forbidden',403)
+                seconds=b.get('seconds',3600)
+                if type(seconds) not in (int,float) or seconds<0: raise Problem('seconds must be non-negative')
+                cancelled=store.evict_idle(seconds, b.get('reason','idle eviction'))
+                return self.send(200,{'cancelled':cancelled,'count':len(cancelled)})
             elif path=='/api/suites':
                 if role!='admin': raise Problem('forbidden',403)
                 store.suite(b['id'],b['cases'])

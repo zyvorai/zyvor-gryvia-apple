@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Idle deployment eviction (scale-to-zero)**: `GET /api/models/idle` lists deployed models with no inference traffic within a window; `POST /api/models/evict-idle` cancels their serve jobs. `GET /api/capacity` returns a compact free/reserved picture. Unit tests in `tests/test_idle.py`.
 - **Hyperparameter sweeps**: one fine-tune fans out over a small grid (learning rate × LoRA layers × batch size, at most 12 runs) as ordinary queued training jobs; runs are ranked by validation loss with the best marked. Dashboard Sweep panel, `gryvia sweep` / `sweep-status` / `sweep-cancel`, `POST /api/sweeps`, `GET /api/sweeps/<id>`, MCP `gryvia_sweeps`, `gryvia_sweep` and (write) `gryvia_create_sweep`.
 - Idle-time harvesting, power/thermal policy and energy estimates, MCP server and App Intents, signed model provenance (in progress for 0.3.0).
 

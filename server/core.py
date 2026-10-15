@@ -836,3 +836,42 @@ class Store:
                 j['spec']=json.loads(j.pop('body')); j['result']=json.loads(j['result']); j.pop('lease'); jobs.append(j)
             return {'jobs':jobs,'nodes':[] if tenant else [dict(id=r['id'],seen=r['seen'],drain=bool(r['drain']),online=self.clock()-r['seen']<=30,policy=self.node_policy(r['id']),gate=dict(zip(('allowed','reason'),policy_gate(self.node_policy(r['id']),json.loads(r['body']).get('presence')))),**json.loads(r['body'])) for r in self.db.execute('SELECT * FROM nodes')], 'tenants':[dict(r) for r in self.db.execute('SELECT * FROM tenants') if not tenant or r['id']==tenant], 'models':[dict(id=r['id'],**json.loads(r['body'])) for r in self.db.execute('SELECT * FROM models') if not tenant or not json.loads(r['body']).get('tenants') or tenant in json.loads(r['body'])['tenants']], 'events':[dict(r) for r in self.db.execute('SELECT * FROM events ORDER BY seq DESC LIMIT 100')] if not tenant else [], 'usage':[dict(r,kWh=round((r['joules'] or 0)/3.6e6,6)) for r in self.db.execute('SELECT tenant,SUM(seconds) AS workerSeconds,SUM(gibSeconds) AS reservedGiBSeconds,SUM(joules) AS joules FROM usage GROUP BY tenant') if not tenant or r['tenant']==tenant], 'decisions':[] if tenant else self.recent_decisions(40),'datasets':[dict(id=r['id'],**json.loads(r['body'])) for r in self.db.execute('SELECT * FROM datasets')],'workflows':[dict(id=r['id'],at=r['at'],**json.loads(r['body'])) for r in self.db.execute('SELECT * FROM workflows ORDER BY at DESC LIMIT 50') if not tenant or json.loads(r['body'])['tenant']==tenant],'sweeps':[dict(id=r['id'],at=r['at'],**json.loads(r['body'])) for r in self.db.execute('SELECT * FROM sweeps ORDER BY at DESC LIMIT 20') if not tenant or json.loads(r['body'])['tenant']==tenant],'time':self.clock()}
         return self.tx(run)
+    def last_inference_at(self, model_id):
+        """Most recent inference.completed event for this model, or None."""
+        row=self.db.execute("SELECT MAX(at) AS a FROM events WHERE kind='inference.completed' AND subject=?",(model_id,)).fetchone()
+        return row['a'] if row and row['a'] is not None else None
+    def idle_deployments(self, idle_seconds=3600):
+        """Deployed models with no inference traffic (or deploy activity) within idle_seconds.
+        Returns list of dicts with id, last, idle, endpoints, deployJob."""
+        now=self.clock(); out=[]
+        for row in self.db.execute('SELECT id, body FROM models'):
+            m=json.loads(row['body'])
+            if m.get('status')!='deployed' or not m.get('endpoints'): continue
+            last=self.last_inference_at(row['id'])
+            ref=last or m.get('updated') or 0
+            idle=now-ref
+            if idle>idle_seconds:
+                out.append(dict(id=row['id'], last=last, idle=round(idle,1), endpoints=list(m.get('endpoints',[])), deployJob=m.get('deployJob')))
+        return out
+    def evict_idle(self, idle_seconds=3600, reason='idle eviction'):
+        """Cancel serve jobs belonging to models idle longer than the threshold.
+        Returns list of cancelled job ids. Safe to call repeatedly."""
+        cancelled=[]
+        for item in self.idle_deployments(idle_seconds):
+            for j in self.db.execute("SELECT id, state, body FROM jobs WHERE state IN ('queued','running')"):
+                spec=json.loads(j['body'])
+                if spec.get('modelId')==item['id'] and spec.get('kind')=='serve':
+                    try:
+                        self.cancel(j['id'])
+                        cancelled.append(j['id'])
+                        self.event('model.evict_idle', item['id'], reason+' '+j['id'])
+                    except Problem:
+                        pass
+        return cancelled
+    def capacity_summary(self):
+        """Compact current capacity picture for operators and dashboards."""
+        t=self.fleet_totals()
+        free=max(0.0, t['budget']-t['reserved'])
+        return dict(online=t['online'], budgetGiB=t['budget'], reservedGiB=round(t['reserved'],2), freeGiB=round(free,2),
+                    queued=t['states']['queued'], running=t['states']['running'],
+                    utilisationPct=round(100*t['reserved']/t['budget'],1) if t['budget'] else 0)
