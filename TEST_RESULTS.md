@@ -164,7 +164,14 @@ Changes and usage: [docs/FLEET-RELIABILITY.md](docs/FLEET-RELIABILITY.md).
   - `GET /api/capacity` returned online 1, budget 8 GiB, reserved 0, `reservedPct` 0.
   - `GET /api/models/idle` and `POST /api/models/evict-idle` (30-day window) returned empty, with nothing cancelled.
   - `seconds=abc|nan|-1` and an empty `reason` returned 400.
+- **Live eviction of a real model server on the mini:**
+  - Onboarded `ggml-org/tiny-llamas/stories260K.gguf` (1.2 MB) and deployed it with `llama-server` behind the agent relay (`agentRelay: true`).
+  - Three chat requests through `/v1/chat/completions` returned 200. This is also the first real-model run of the fleet-reliability relay.
+  - Straight after the traffic, `evict-idle` with a 10-minute window cancelled nothing.
+  - After 75 s with no traffic, `idle?seconds=60` listed only that model at 80 s idle, and `evict-idle` cancelled exactly its serve job.
+  - The job reached `cancelled`, the model went back to `ready` with no endpoints, no `llama-server` process was left, reserved GiB returned to 0, and the next chat request got 503 `no allowlisted inference replica`.
 - **Not verified:**
-  - Evicting a real deployed model server on the mini (no model is deployed there).
+  - Eviction of an MLX (`mlx_lm.server`) deployment.
+  - Eviction with several concurrent deployments on one Mac.
   - Non-admin 403 on the live server (covered by the unit tests only).
   - GitHub CI: runs for PRs #11–#13 stayed queued, and those PRs merged without a CI result.
