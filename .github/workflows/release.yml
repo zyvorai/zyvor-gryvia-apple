@@ -18,20 +18,20 @@ jobs:
     outputs:
       tag: ${{ steps.vars.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { ref: "${{ github.event.inputs.tag || github.ref }}" }
       - id: vars
         run: |
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           test "${TAG#v}" = "$(cat VERSION)" || { echo "tag $TAG does not match VERSION $(cat VERSION)"; exit 1; }
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with: { python-version: '3.14' }
       - run: python3 -m unittest discover -s tests
       - run: bash scripts/package-release.sh
       - name: release notes from CHANGELOG
         run: awk -v t="## ${{ steps.vars.outputs.tag }}" 'index($0,t)==1{f=1;next} /^## /{f=0} f' CHANGELOG.md > notes.md; test -s notes.md || echo "See CHANGELOG.md" > notes.md
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         with: { subject-path: 'release/*.tar.gz' }
       - name: create or update the GitHub release
         env: { GH_TOKEN: "${{ github.token }}" }
@@ -43,9 +43,9 @@ jobs:
     needs: release
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { ref: "${{ github.event.inputs.tag || github.ref }}" }
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with: { python-version: '3.14' }
       - uses: maxim-lobanov/setup-xcode@v1
         with: { xcode-version: latest-stable }
@@ -77,7 +77,7 @@ jobs:
         env:
           DEVELOPER_ID_APP: ${{ secrets.DEVELOPER_ID_APP }}
           DEVELOPER_ID_INSTALLER: ${{ secrets.DEVELOPER_ID_INSTALLER }}
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         with: { subject-path: 'release/Gryvia-*' }
       - name: upload to the release
         env: { GH_TOKEN: "${{ github.token }}" }
