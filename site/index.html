@@ -144,6 +144,11 @@
       <div class="card reveal"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><h3>Leases that fail safe</h3><p>Workers hold short renewable leases. A stale worker cannot finish a job it lost, and a cancelled job keeps its reservation until the process has stopped.</p></div>
       <div class="card reveal"><div class="ico"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></div><h3>Observable</h3><p>Live GPU cores, scheduler decisions with reasons, Prometheus metrics, per-tenant usage and energy estimates, and an audit trail.</p></div>
     </div>
+    <div class="grid g3" style="margin-top:18px">
+      <div class="card reveal"><div class="ico"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 15l3-3 2 2 3-4"/></svg></div><h3>Fits before it runs</h3><p><code>gryvia fit</code> estimates weights plus KV cache for every Mac. Admission also checks macOS memory pressure and Metal's working set, and critical pressure asks running work to stop.</p></div>
+      <div class="card reveal"><div class="ico"><svg viewBox="0 0 24 24"><path d="M12 20V8M7 12l5-5 5 5"/><path d="M5 4h14"/></svg></div><h3>No inbound ports</h3><p>Model servers stay on their Mac's loopback. The agent relays requests and SSE streams over its own outbound, lease-bound connection, and your platform token never reaches the model server.</p></div>
+      <div class="card reveal"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4M9 16h6"/></svg></div><h3>Idle replicas, scaled to zero</h3><p>List deployments nobody has called within a window, then stop them to free their memory reservation. You trigger it; nothing evicts on its own.</p></div>
+    </div>
   </div>
 </section>
 
@@ -209,6 +214,7 @@
         <tbody>
           <tr><td>Llama-3.2-1B-Instruct Q4_K_M, llama-bench</td><td class="n">5,999 tok/s prompt · 151 tok/s generation</td><td>512 prompt / 128 generated tokens, 3 repetitions, idle Mac, one run</td></tr>
           <tr><td>Same model through the gateway, streaming</td><td class="n">0.28 s to first token</td><td>120 chunks in 1.07 s</td></tr>
+          <tr><td>Idle eviction, live: tiny GGUF on llama-server behind the agent relay</td><td class="n">Kept while busy · evicted after 75 s idle</td><td>Serve job cancelled, endpoint cleared, process exited; later requests get 503. One run, macOS 27.2</td></tr>
           <tr><td>MLX LoRA on Llama-3.2-1B-Instruct-4bit, 120 iterations</td><td class="n">3 / 72 → 71 / 72 held-out phrasings</td><td>24 facts × 5 stems; unseen stems; keyword scoring; one seed. With self-rehearsal 65 / 72 and no regressions on general questions (23 / 24)</td></tr>
         </tbody>
       </table>
@@ -359,6 +365,7 @@ shasum -a 256 -c Gryvia-0.3.0.dmg.sha256</pre>
     <details><summary>Is GPU utilisation per job?</summary><p>No. It is the whole Mac's GPU load as macOS reports it, including other apps. Reservations are admission bookkeeping, and energy figures are estimates.</p></details>
     <details><summary>Can I use a Mac that someone is also working on?</summary><p>Yes: set its policy to “only when I am away”. Work starts after the idle time you choose and yields when the owner returns. Battery, Low Power Mode and call guards apply.</p></details>
     <details><summary>What does it send where?</summary><p>Agents poll your control plane outbound. Nothing is sent to Zyvor. Models are downloaded only from huggingface.co or hf.co, with a size cap and a recorded SHA-256.</p></details>
+    <details><summary>Do deployed models hold memory forever?</summary><p>Only until you stop them. A deployment keeps its reservation while its serve job runs. Idle eviction lists deployments with no gateway traffic in a window you choose and stops them; run it by hand or from cron. There is no autoscaler, and the next request does not redeploy a model automatically.</p></details>
     <details><summary>Which Macs and runtimes?</summary><p>Apple Silicon on macOS 15 or later. llama.cpp (GGUF), MLX and Core ML wrappers ship in the box, and runtimes are enabled per Mac in its own config.</p></details>
   </div>
 </section>
