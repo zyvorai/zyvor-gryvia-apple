@@ -31,6 +31,11 @@ for (const [name, size, scheme] of [['desktop-light', { width: 1440, height: 900
   if (!resp || resp.status() !== 200) problems.push(`${name}: status ${resp && resp.status()}`);
   const h1 = await page.textContent('h1');
   if (!/scheduled/i.test(h1)) problems.push(`${name}: hero headline missing`);
+  if (name === 'desktop-light') {
+    const buy = await page.getAttribute('a:has-text("Buy the signed build")', 'href');
+    if (!buy || !/^https:\/\//.test(buy)) problems.push(`buy link missing or not https: ${buy}`);
+    if (!(await page.textContent('body')).includes('₹420')) problems.push('paid build price text missing');
+  }
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
   if (overflow) problems.push(`${name}: horizontal scroll`);
   const imgs = await page.evaluate(() => [...document.images].filter(i => i.complete && i.naturalWidth === 0).map(i => i.src));
