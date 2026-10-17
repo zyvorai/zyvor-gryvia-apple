@@ -56,27 +56,43 @@
   <div class="wrap">
     <div class="eyebrow reveal">Watch it work</div>
     <h2 class="reveal">One fleet, five views.</h2>
+    <p class="sub reveal">Scroll, or use the arrow keys on a step. Every image here is the dashboard running on the built-in simulated fleet.</p>
     <div class="story" id="story-root">
-      <div class="story-steps">
-        <article class="step" data-step="0"><h3>Every Mac, counted.</h3><p>GPU cores and measured busy percentage straight from macOS, memory reservations by job, and the scheduler's reasoning as it happens.</p></article>
-        <article class="step" data-step="1"><h3>Models, measured.</h3><p>Onboard from Hugging Face with a size cap and SHA-256, then benchmark and evaluate on any Mac. Throughput is shown against your fastest model.</p></article>
-        <article class="step" data-step="2"><h3>Fine-tune with the loss in view.</h3><p>MLX LoRA runs report train and validation loss as they go; the best checkpoint is marked, and the adapter keeps its lineage.</p></article>
-        <article class="step" data-step="3"><h3>Sweep a grid, keep the best.</h3><p>One fine-tune fans out over learning rates, LoRA layers and batch sizes as ordinary queued jobs, so quotas and owner policy still apply. Runs are ranked by validation loss and the best adapter is marked.</p></article>
-        <article class="step" data-step="4"><h3>Owners stay in control.</h3><p>Each Mac chooses when it may run fleet work: always, only when its owner is away, or paused, with battery and call guards.</p></article>
+      <div class="story-steps" role="group" aria-label="Feature walkthrough">
+        <article class="step" data-step="0" tabindex="0" aria-label="Step 1 of 5: Every Mac, counted."><h3>Every Mac, counted.</h3><p>GPU cores and measured busy percentage straight from macOS, memory reservations by job, and the scheduler's reasoning as it happens.</p><figure class="step-img window"><div class="bar"><i></i><i></i><i></i><span>Gryvia</span></div><picture><img class="light" src="img/live-light.jpg" alt="Live view: GPU cores, reservations and scheduling flow (light, simulated fleet)" width="1440" height="900" loading="lazy"><img class="dark" src="img/live-dark.jpg" alt="Live view: GPU cores, reservations and scheduling flow (dark, simulated fleet)" width="1440" height="900" loading="lazy"></picture></figure></article>
+        <article class="step" data-step="1" tabindex="0" aria-label="Step 2 of 5: Models, measured."><h3>Models, measured.</h3><p>Onboard from Hugging Face with a size cap and SHA-256, then benchmark and evaluate on any Mac. Throughput is shown against your fastest model.</p><figure class="step-img window"><div class="bar"><i></i><i></i><i></i><span>Gryvia</span></div><picture><img class="light" src="img/models-light.jpg" alt="Model hub: status, throughput, evaluations and provenance (light, simulated fleet)" width="1440" height="900" loading="lazy"><img class="dark" src="img/models-dark.jpg" alt="Model hub: status, throughput, evaluations and provenance (dark, simulated fleet)" width="1440" height="900" loading="lazy"></picture></figure></article>
+        <article class="step" data-step="2" tabindex="0" aria-label="Step 3 of 5: Fine-tune with the loss in view."><h3>Fine-tune with the loss in view.</h3><p>MLX LoRA runs report train and validation loss as they go; the best checkpoint is marked, and the adapter keeps its lineage.</p><figure class="step-img window"><div class="bar"><i></i><i></i><i></i><span>Gryvia</span></div><picture><img class="light" src="img/training-light.jpg" alt="Training: live loss chart and runs (light, simulated fleet)" width="1440" height="900" loading="lazy"><img class="dark" src="img/training-dark.jpg" alt="Training: live loss chart and runs (dark, simulated fleet)" width="1440" height="900" loading="lazy"></picture></figure></article>
+        <article class="step" data-step="3" tabindex="0" aria-label="Step 4 of 5: Sweep a grid, keep the best."><h3>Sweep a grid, keep the best.</h3><p>One fine-tune fans out over learning rates, LoRA layers and batch sizes as ordinary queued jobs, so quotas and owner policy still apply. Runs are ranked by validation loss and the best adapter is marked.</p><figure class="step-img window"><div class="bar"><i></i><i></i><i></i><span>Gryvia</span></div><picture><img class="light" src="img/sweep-light.jpg" alt="Sweep: a grid of fine-tunes ranked by validation loss (light, simulated fleet)" width="1440" height="900" loading="lazy"><img class="dark" src="img/sweep-dark.jpg" alt="Sweep: a grid of fine-tunes ranked by validation loss (dark, simulated fleet)" width="1440" height="900" loading="lazy"></picture></figure></article>
+        <article class="step" data-step="4" tabindex="0" aria-label="Step 5 of 5: Owners stay in control."><h3>Owners stay in control.</h3><p>Each Mac chooses when it may run fleet work: always, only when its owner is away, or paused, with battery and call guards.</p><figure class="step-img window"><div class="bar"><i></i><i></i><i></i><span>Gryvia</span></div><picture><img class="light" src="img/fleet-light.jpg" alt="Fleet: owner policy and whether each Mac is accepting work (light, simulated fleet)" width="1440" height="900" loading="lazy"><img class="dark" src="img/fleet-dark.jpg" alt="Fleet: owner policy and whether each Mac is accepting work (dark, simulated fleet)" width="1440" height="900" loading="lazy"></picture></figure></article>
       </div>
-      <div class="story-stage" aria-hidden="true">
+      <div class="story-stage">
         <div class="window">
-          <div class="bar"><i></i><i></i><i></i><span>Gryvia</span></div>
+          <div class="bar"><i></i><i></i><i></i><span>Gryvia · simulated fleet</span></div>
           <div class="stage-imgs">
-            <picture class="shot on" data-step="0"><img class="light" src="img/live-light.jpg" alt="" width="1440" height="900"><img class="dark" src="img/live-dark.jpg" alt="" width="1440" height="900"></picture>
-            <picture class="shot" data-step="1"><img class="light" src="img/models-light.jpg" alt="" width="1440" height="900"><img class="dark" src="img/models-dark.jpg" alt="" width="1440" height="900"></picture>
-            <picture class="shot" data-step="2"><img class="light" src="img/training-light.jpg" alt="" width="1440" height="900"><img class="dark" src="img/training-dark.jpg" alt="" width="1440" height="900"></picture>
-            <picture class="shot" data-step="3"><img class="light" src="img/sweep-light.jpg" alt="" width="1440" height="900"><img class="dark" src="img/sweep-dark.jpg" alt="" width="1440" height="900"></picture>
-            <picture class="shot" data-step="4"><img class="light" src="img/fleet-light.jpg" alt="" width="1440" height="900"><img class="dark" src="img/fleet-dark.jpg" alt="" width="1440" height="900"></picture>
+            <picture class="shot on" data-step=0><img class="light" src="img/live-light.jpg" alt="Live view: GPU cores, reservations and scheduling flow (light, simulated fleet)" width="1440" height="900"><img class="dark" src="img/live-dark.jpg" alt="Live view: GPU cores, reservations and scheduling flow (dark, simulated fleet)" width="1440" height="900"></picture>
+            <picture class="shot" data-step=1><img class="light" src="img/models-light.jpg" alt="Model hub: status, throughput, evaluations and provenance (light, simulated fleet)" width="1440" height="900" loading="lazy"><img class="dark" src="img/models-dark.jpg" alt="Model hub: status, throughput, evaluations and provenance (dark, simulated fleet)" width="1440" height="900" loading="lazy"></picture>
+            <picture class="shot" data-step=2><img class="light" src="img/training-light.jpg" alt="Training: live loss chart and runs (light, simulated fleet)" width="1440" height="900" loading="lazy"><img class="dark" src="img/training-dark.jpg" alt="Training: live loss chart and runs (dark, simulated fleet)" width="1440" height="900" loading="lazy"></picture>
+            <picture class="shot" data-step=3><img class="light" src="img/sweep-light.jpg" alt="Sweep: a grid of fine-tunes ranked by validation loss (light, simulated fleet)" width="1440" height="900" loading="lazy"><img class="dark" src="img/sweep-dark.jpg" alt="Sweep: a grid of fine-tunes ranked by validation loss (dark, simulated fleet)" width="1440" height="900" loading="lazy"></picture>
+            <picture class="shot" data-step=4><img class="light" src="img/fleet-light.jpg" alt="Fleet: owner policy and whether each Mac is accepting work (light, simulated fleet)" width="1440" height="900" loading="lazy"><img class="dark" src="img/fleet-dark.jpg" alt="Fleet: owner policy and whether each Mac is accepting work (dark, simulated fleet)" width="1440" height="900" loading="lazy"></picture>
           </div>
         </div>
+        <p class="note demo-label">Simulated fleet data from the built-in demo, not a customer fleet.</p>
       </div>
     </div>
+  </div>
+</section>
+
+<section id="specs" class="alt">
+  <div class="wrap">
+    <div class="eyebrow reveal">What was measured</div>
+    <h2 class="reveal">Verified on two Macs. Honest about the rest.</h2>
+    <div class="grid g4 specs">
+      <div class="spec reveal"><span class="big">8 · 12</span><h3>GPU cores read from macOS</h3><p>Core count and utilisation come from the IORegistry (<code>AGXAccelerator</code>, no sudo). Matched against <code>ioreg</code> on a dev Mac (M4, 8 cores, macOS 27.2) and a Mac mini (12 cores, macOS 27.0).</p></div>
+      <div class="spec reveal"><span class="big">59</span><h3>Python unit tests</h3><p>Passed on both Macs in the 14 October 2026 run. Native agent built and XCTested on the dev Mac; the mini ran its agent smoke test.</p></div>
+      <div class="spec reveal"><span class="big">1</span><h3>GPU per Mac</h3><p>GPU utilisation is the whole Mac's load, including other apps, not per job. Reservations are admission bookkeeping, not isolation.</p></div>
+      <div class="spec reveal"><span class="big">Not yet</span><h3>Unmeasured or unverified</h3><p>In that run: Metal, MLX and llama runtimes, GPU throughput and isolation. The energy helper was not run on real hardware. Developer ID signing and notarization are not verified in <code>docs/RELEASE.md</code>.</p></div>
+    </div>
+    <p class="note reveal">Source: <a href="https://github.com/zyvorai/zyvor-gryvia-apple/blob/main/TEST_RESULTS.md">TEST_RESULTS.md</a> (verified 2026-10-14) and <a href="https://github.com/zyvorai/zyvor-gryvia-apple/blob/main/docs/FEATURE_MATRIX.md">docs/FEATURE_MATRIX.md</a>. Counts are from that dated run; results of later single runs are in the table below. Screenshots on this page show simulated fleet data.</p>
   </div>
 </section>
 
