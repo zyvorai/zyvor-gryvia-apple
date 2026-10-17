@@ -7,6 +7,7 @@ Packaging is implemented and exercised locally; nothing has been published yet.
 - **Verified locally (macOS 27.2, Apple silicon, Swift 6.4, Python 3.14):** `scripts/package-mac.sh 0.3.0` produced the DMG, pkg and zip; both `.sha256` files verify; the pkg payload contains the app, the agent helper and the icon; `scripts/package-release.sh` produced the server and SDK tarballs, the SBOM and `SHA256SUMS`; the archives contain no `credentials.env`, `config.json`, databases or caches (asserted by a test).
 - **Not verified:** the pkg installed on a second Mac; Developer ID signing and notarization (no credentials available); the Homebrew cask (tap not created); the release workflow on GitHub (not yet run).
 - **Signing status of artifacts:** ad hoc signed app, unsigned DMG and pkg, not notarized. Gatekeeper blocks the first launch on other Macs: Control-click → Open, or System Settings → Privacy & Security → Open Anyway. Verify with `shasum -a 256 -c Gryvia-0.3.0.dmg.sha256`.
+- **Paid build:** the ₹420 business-use download is a separate Developer ID signed build: `Gryvia-0.3.0.dmg` was accepted by Apple's notary service and has the ticket stapled, so it opens without a Gatekeeper warning. The statement above describes the free builds from the GitHub release and CI, which have no signing secrets. The pkg of the paid build was not checked here.
 
 ## Cutting a release
 
