@@ -39,19 +39,34 @@
   var hg = document.getElementById('hero-grid');
   if (hg) { var f = document.createDocumentFragment(); for (var y = 0; y < 6; y++) for (var x = 0; x < 40; x++) { var c = document.createElement('i'); c.style.setProperty('--x', x); c.style.setProperty('--y', y); f.appendChild(c); } hg.appendChild(f); }
 
-  // scroll story: highlight the step nearest the middle and show its screenshot
-  var steps = document.querySelectorAll('.story-steps .step'), shots = document.querySelectorAll('.stage-imgs .shot');
-  if ('IntersectionObserver' in window && steps.length) {
-    var stepObserver = new IntersectionObserver(function (es) {
-      es.forEach(function (e) {
-        if (!e.isIntersecting) return;
-        var n = e.target.dataset.step;
-        steps.forEach(function (s) { s.classList.toggle('active', s.dataset.step === n); });
-        shots.forEach(function (s) { s.classList.toggle('on', s.dataset.step === n); });
+  // feature walkthrough: the step nearest the middle (or focused) is current and its screenshot shows in the pinned stage
+  var steps = document.querySelectorAll('.story-steps .step'), shots = document.querySelectorAll('.stage-imgs .shot'), storyRoot = document.getElementById('story-root');
+  function setStep(n) {
+    steps.forEach(function (s) { var on = s.dataset.step === n; s.classList.toggle('active', on); if (on) s.setAttribute('aria-current', 'step'); else s.removeAttribute('aria-current'); });
+    shots.forEach(function (s) { var on = s.dataset.step === n; s.classList.toggle('on', on); s.setAttribute('aria-hidden', String(!on)); });
+  }
+  if (steps.length) {
+    setStep('0');
+    // preload every stage image shortly before the walkthrough is reached, so swaps never flash
+    var preload = function () { document.querySelectorAll('.stage-imgs img').forEach(function (i) { i.loading = 'eager'; }); };
+    if ('IntersectionObserver' in window && storyRoot) {
+      var po = new IntersectionObserver(function (es) { if (es[0].isIntersecting) { preload(); po.disconnect(); } }, { rootMargin: '800px 0px' });
+      po.observe(storyRoot);
+    } else preload();
+    if ('IntersectionObserver' in window) {
+      var stepObserver = new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) setStep(e.target.dataset.step); }); }, { rootMargin: '-45% 0px -45% 0px' });
+      steps.forEach(function (s) { stepObserver.observe(s); });
+    }
+    var reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+    steps.forEach(function (s, i) {
+      s.addEventListener('focus', function () { setStep(s.dataset.step); });
+      s.addEventListener('keydown', function (e) {
+        var j = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? i - 1 : -1;
+        if (j < 0 || j >= steps.length) return;
+        e.preventDefault(); steps[j].focus({ preventScroll: true });
+        steps[j].scrollIntoView({ block: 'center', behavior: reduceMotion.matches ? 'auto' : 'smooth' });
       });
-    }, { rootMargin: '-45% 0px -45% 0px' });
-    steps.forEach(function (s) { stepObserver.observe(s); });
-    steps[0].classList.add('active');
+    });
   }
 
   // active nav link
