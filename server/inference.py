@@ -80,7 +80,7 @@ class Gateway:
                 return result
             req=urllib.request.Request(endpoint+'/v1/chat/completions',data=json.dumps(request).encode(),headers={'Content-Type':'application/json'})
             try:
-                with self._opener().open(req,timeout=30) as r:
+                with self._opener().open(req,timeout=180) as r:
                     data=r.read(4*1024*1024+1)
                     if len(data)>4*1024*1024:raise Problem('worker response too large',502)
                     result=json.loads(data)
