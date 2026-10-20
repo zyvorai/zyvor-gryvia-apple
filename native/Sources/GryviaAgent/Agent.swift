@@ -53,7 +53,7 @@ struct Config: Decodable {
             let (exe,args)=try runtime.command(job.spec)
             p.executableURL=URL(fileURLWithPath:exe); p.arguments=args
             var env=ProcessInfo.processInfo.environment
-            env.removeValue(forKey:"GRYVIA_AGENT_TOKEN"); env.removeValue(forKey:"GRYVIA_ADMIN_TOKEN")
+            for key in env.keys where key.hasPrefix("GRYVIA_") && key.hasSuffix("TOKEN") { env.removeValue(forKey:key) }
             env["GRYVIA_MEMORY_RESERVATION_GIB"]=String(job.spec.memoryGiB)
             if let gib=Hardware.report(budget:config.budgetGiB,runtimes:[])["metalWorkingSetGiB"] as? Double { env["GRYVIA_METAL_WORKING_SET_BYTES"]=String(gib*pow(1024,3)) }
             env.removeValue(forKey: "GRYVIA_INPUT_MANIFEST")

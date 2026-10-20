@@ -54,7 +54,7 @@ struct PauseThisMacIntent: AppIntent {
         let host = ProcessInfo.processInfo.hostName.lowercased()
         let short = host.split(separator: ".").first.map(String.init) ?? host
         let state = try await api.state()
-        guard let me = state.nodes.first(where: { ($0.host ?? "").lowercased().hasPrefix(short) || $0.id.lowercased() == short }) else {
+        guard let me = state.nodes.first(where: { (($0.host ?? "").lowercased().split(separator: ".").first.map(String.init) ?? "") == short || $0.id.lowercased() == short }) else {
             return .result(dialog: "This Mac is not registered with the fleet.")
         }
         let mode = (resume ?? false) ? "always" : "paused"

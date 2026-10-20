@@ -35,7 +35,7 @@ class API(BaseHTTPRequestHandler):
         raw=self.headers.get('Authorization','')
         token=raw[7:] if raw.startswith('Bearer ') else ''
         for key,actor in self.server.tokens.items():
-            if secrets.compare_digest(token,key): return actor
+            if secrets.compare_digest(token.encode(),key.encode()): return actor
         raise Problem('authentication required',401)
     def body(self):
         size=int(self.headers.get('Content-Length','0'))

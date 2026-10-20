@@ -12,7 +12,9 @@ if [[ "${1:-}" == "--uninstall" ]]; then
   echo "removed $LABEL"; exit 0
 fi
 HERE="$(cd "$(dirname "$0")" && pwd)"
-PY="$(command -v /opt/homebrew/bin/python3.14 || command -v python3)"
+# Root daemon: use a root-owned interpreter, never a user-writable Homebrew path.
+PY=/usr/bin/python3
+[[ -x "$PY" ]] || { echo "error: $PY not found" >&2; exit 1; }
 sudo mkdir -p /usr/local/libexec
 sudo install -m 0755 -o root -g wheel "$HERE/power-helper.py" "$DEST"
 sudo tee "$PLIST" >/dev/null <<PL

@@ -27,6 +27,7 @@ class APITests(unittest.TestCase):
         self.assertEqual(self.req('/api/sweeps/cancel','t'*32,dict(id=sid))[0],200)
         self.assertEqual({r['state'] for r in self.req('/api/sweeps/'+sid)[1]['runs']},{'cancelled'})
     def test_auth(self):self.assertEqual(self.req('/api/state','bad')[0],401)
+    def test_auth_non_ascii_token(self):self.assertEqual(self.req('/api/state','caf\u00e9')[0],401)
     def test_role_enforcement(self):
         self.assertEqual(self.req('/api/tenants','t'*32,dict(id='hack',quota=4))[0],403)
         self.assertEqual(self.req('/api/state','n'*32)[0],403)
