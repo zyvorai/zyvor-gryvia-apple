@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.4.3 — 2026-10-21
+
+- **Mac app**: new app icon (black tile, blue bloom, glowing G); the web dashboard favicon matches.
+
 ## v0.4.2 — 2026-10-21
 
 - **Mac app**: clearer About window: a product statement, an honest-numbers line and a shorter licence line.

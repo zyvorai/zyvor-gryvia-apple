@@ -1,6 +1,6 @@
 {
   "name": "gryvia-apple-web-tests",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "private": true,
   "scripts": {
     "test:web": "bash scripts/browser-test.sh"
