@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: BUSL-1.1
 # Copyright © 2026 Zyvor AI Labs Private Limited
-# Render brand/gryvia-icon.svg into native/Gryvia.icns, web/icon.png and web/favicon.svg.
+# Render brand/gryvia-icon.svg into native/Gryvia.icns, web/icon.png, web/favicon.svg and the site icons (site/img/favicon.svg, site/img/apple-touch-icon.png).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 command -v rsvg-convert >/dev/null || { echo 'rsvg-convert required (brew install librsvg)' >&2; exit 1; }
@@ -14,4 +14,6 @@ done
 iconutil -c icns "$set_dir" -o native/Gryvia.icns
 rsvg-convert -w 180 -h 180 brand/gryvia-icon.svg -o web/icon.png
 cp brand/gryvia-icon.svg web/favicon.svg
-echo "wrote native/Gryvia.icns web/icon.png web/favicon.svg"
+cp brand/gryvia-icon.svg site/img/favicon.svg
+cp web/icon.png site/img/apple-touch-icon.png
+echo "wrote native/Gryvia.icns web/icon.png web/favicon.svg site/img/favicon.svg site/img/apple-touch-icon.png"
