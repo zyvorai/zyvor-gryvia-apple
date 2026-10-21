@@ -1104,7 +1104,7 @@ struct SettingsView: View {
             }
             Picker("Refresh every", selection: $refresh) { ForEach([2, 5, 15, 60], id: \.self) { Text("\($0) s").tag($0) } }
             Section("About") {
-                Text("Gryvia Apple 0.4.2 · Business Source License 1.1")
+                Text("Gryvia Apple 0.4.3 · Business Source License 1.1")
                 Text("Copyright © 2026 Zyvor AI Labs Private Limited").foregroundStyle(.secondary)
             }
         }.formStyle(.grouped).frame(width: 420).padding()
