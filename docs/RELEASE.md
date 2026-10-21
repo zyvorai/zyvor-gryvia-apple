@@ -1,11 +1,14 @@
 # Release status and how to cut a release
 
-## v0.4.0 (in preparation)
+## v0.4.0 (published 21 October 2026)
 
-Folds in the never-published v0.3.0 work plus opt-in auto idle eviction, multi-replica serving and the Idle deployments panel (PR #23).
+https://github.com/zyvorai/zyvor-gryvia-apple/releases/tag/v0.4.0. Folds in the never-published v0.3.0 work plus opt-in auto idle eviction, multi-replica serving and the Idle deployments panel (PR #23).
 
 - **Verified (MacBook, macOS 27.2, Python 3.14):** 223 Python tests; `make verify` including XCTest and the release build, run before the final rebase onto main (the rebase conflict was in `server/inference.py` only, Python tests re-run after it).
-- **Not verified:** replicas across two physical Macs; relay-mode replicas beyond the existing single-replica relay tests; the Playwright browser test (not installed on this Mac); GitHub CI for PR #23; the notarized v0.4.0 build (see the release notes once published).
+- **Not verified:** replicas across two physical Macs; relay-mode replicas beyond the existing single-replica relay tests; the Playwright browser test (not installed on this Mac); GitHub CI for PR #23; the pkg (unsigned, no Developer ID Installer certificate) and the zip (not submitted to the notary service separately); a fresh install on a second Mac.
+- **Signing and notarization (verified on the MacBook, macOS 27.2):** `Gryvia-0.4.0.dmg` was signed with the Developer ID Application identity (hardened runtime), accepted by Apple's notary service and stapled. `stapler validate` passes and `spctl` reports "Notarized Developer ID" for the DMG and the app inside it. All three `.sha256` files verified against the files downloaded from the published release.
+- **How the assets got there:** the release workflow created the release and tarballs; its Mac job had no signing secrets, so the DMG, pkg and zip (and their checksums) were replaced with the locally built, notarized ones using `gh release upload --clobber`.
+- **Homebrew:** the tap is still not created; the cask template carries the 0.4.0 version and checksum.
 
 ## v0.3.0 (never published; folded into v0.4.0)
 

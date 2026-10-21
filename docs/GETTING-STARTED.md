@@ -81,7 +81,7 @@ Idle is measured from gateway requests only; direct calls to a worker's port are
 | Deploy stays queued | `gryvia nodes`: online, not drained, enough free GiB, artifact on that Mac |
 | Request returns 503 `no allowlisted inference replica` | model not deployed, evicted, or its Mac is offline |
 | Request returns 502 | the replica failed; with replicas the gateway already tried one other |
-| Gatekeeper blocks the app | ad hoc builds: Control-click → Open; or use the notarized build |
+| Gatekeeper blocks the app | the v0.4.0 DMG is notarized; for ad hoc or unsigned builds Control-click → Open |
 
 ## Honest limits
 
