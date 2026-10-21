@@ -22,6 +22,7 @@
 <nav class="top" aria-label="Primary">
   <div class="wrap">
     <a class="brand" href="#top"><img src="img/apple-touch-icon.png" alt="" width="26" height="26">Gryvia</a>
+    <a class="link hide-sm" href="#terminal">Try it</a>
     <a class="link hide-sm" href="#new">New</a>
     <a class="link hide-sm" href="#visible">GPUs</a>
     <a class="link hide-sm" href="#how">How it works</a>
@@ -81,6 +82,32 @@
         </div>
         <p class="note demo-label">Simulated fleet data from the built-in demo, not a customer fleet.</p>
       </div>
+    </div>
+  </div>
+</section>
+
+<section id="terminal" class="alt">
+  <div class="wrap">
+    <div class="eyebrow reveal">Zero to served</div>
+    <h2 class="reveal">Five commands from a bare Mac to a streaming endpoint.</h2>
+    <p class="sub reveal">Start the control plane, check a model fits, onboard it, deploy it on two Macs, and call it with the OpenAI-style API.</p>
+    <div class="term reveal" id="term" role="img" aria-label="Terminal session: start the server and agent, check memory fit, onboard a model, deploy on two Macs, call the gateway">
+      <div class="bar"><i></i><i></i><i></i><span>zsh · gryvia</span></div>
+<pre class="term-body"><span class="ln"><span class="p">$</span> make run-server &amp;&amp; make run-agent <span class="c"># this Mac joins the fleet</span></span><span class="ln"><span class="p">$</span> gryvia fit --params-b 8 --quant q4 --context-tokens 4096 <span class="c"># will it fit before I download it?</span></span><span class="ln"><span class="p">$</span> gryvia onboard my-llama --repo bartowski/Llama-3.2-1B-Instruct-GGUF --file Llama-3.2-1B-Instruct-Q4_K_M.gguf</span><span class="ln"><span class="p">$</span> gryvia deploy my-llama --node mini-01 --node mini-02 <span class="c"># one replica per Mac</span></span><span class="ln out">deploying: job &lt;id&gt;; endpoint appears in `gryvia.py models`</span><span class="ln"><span class="p">$</span> curl -s :8443/v1/chat/completions -H "Authorization: Bearer $GRYVIA_TENANT_TOKEN" -d '{"model":"my-llama","messages":[{"role":"user","content":"hi"}]}'</span><span class="ln out">{"choices":[{"message":{"role":"assistant","content":"…"}}]}</span></pre>
+    </div>
+    <p class="note reveal" style="margin-top:10px">The commands are the real ones from the <a href="start/">getting-started guide</a>; output is abbreviated. Replicas across two physical Macs are not yet measured.</p>
+    <div class="cta reveal" style="margin-top:22px;justify-content:flex-start"><a class="btn primary" href="start/">Follow the guide</a><a class="btn ghost" href="demo/">Or click around the demo</a></div>
+  </div>
+</section>
+
+<section id="who">
+  <div class="wrap">
+    <div class="eyebrow reveal">Who it is for</div>
+    <h2 class="reveal">If you own more than one Mac that can run models, this is for you.</h2>
+    <div class="grid g3" style="margin-top:28px">
+      <div class="card reveal"><h3>A small AI team with a Mac rack</h3><p>Several minis and Studios, several people, one queue. Quotas and fairness stop one fine-tune from starving everyone else, and the gateway gives apps a single endpoint.</p></div>
+      <div class="card reveal"><h3>A lab sharing a few machines</h3><p>Reserve unified memory per job, see which Mac is hot or throttling, and keep a signed record of which Mac produced which model.</p></div>
+      <div class="card reveal"><h3>One developer, a MacBook and a mini</h3><p>Let the mini do the overnight runs and serve the model, and let the MacBook stay yours: owner-aware policy yields the moment you are back.</p></div>
     </div>
   </div>
 </section>
@@ -416,6 +443,14 @@ shasum -a 256 -c Gryvia-0.4.0.dmg.sha256</pre>
         </div>
         <p class="note" style="font-size:14px;margin:12px 0 0">No redistribution or resale. Business plans are invoiced for now: write to <a href="mailto:sales@zyvor.dev">sales@zyvor.dev</a> and you get a GST invoice and a download link. <a href="https://github.com/zyvorai/zyvor-gryvia-apple/blob/main/docs/COMMERCIAL-LICENSE.md">Licence terms</a> (draft).</p></div></div>
     </div>
+  </div>
+</section>
+
+<section id="closing" class="closing">
+  <div class="wrap">
+    <h2 class="reveal">Put your Macs to work, on purpose.</h2>
+    <p class="sub reveal" style="margin-left:auto;margin-right:auto">Read it, build it and try it for free. Pay when you run it for real work. Signed, notarized, and honest about what is and is not measured.</p>
+    <div class="cta reveal"><a class="btn primary" href="start/">Get started</a><a class="btn ghost" href="demo/">Live demo</a><a class="btn ghost" href="#download">Pricing and download</a></div>
   </div>
 </section>
 
