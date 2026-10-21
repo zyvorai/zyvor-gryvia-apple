@@ -22,7 +22,7 @@
 
 </div>
 
-> **Zyvor AI Labs · 0.4.1 · BUSL-1.1.** Source-available (not OSI open source); each version converts to Apache-2.0 four years after its first public release. Copyright © 2026 Zyvor AI Labs Private Limited.
+> **Zyvor AI Labs · 0.4.2 · BUSL-1.1.** Source-available (not OSI open source); each version converts to Apache-2.0 four years after its first public release. Copyright © 2026 Zyvor AI Labs Private Limited.
 
 ## See it in 60 seconds
 
