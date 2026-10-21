@@ -168,3 +168,39 @@ html:not(.js) .step-img { display: block; }
 .specs { margin-top: 32px; }
 @media (max-width: 1000px) { .g4 { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 760px) { .g4 { grid-template-columns: 1fr; } }
+
+/* ---- get-started guide ---- */
+.small-hero { padding: 72px 0 36px; text-align: center; position: relative; overflow: hidden; }
+.small-hero .wrap { position: relative; z-index: 1; }
+.narrow { max-width: 820px; }
+section.doc { padding: 40px 0; }
+section.doc h2 { max-width: none; font-size: clamp(26px, 3.4vw, 36px); }
+section.doc p, section.doc li { color: var(--muted); font-size: 17px; }
+section.doc li { margin: 6px 0; } section.doc code { background: var(--bg-2); padding: 1px 6px; border-radius: 6px; font-size: .9em; color: var(--text); }
+section.doc pre code { background: none; padding: 0; color: inherit; }
+.stepper { list-style: none; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; padding: 0; margin: 28px 0 0; counter-reset: s; }
+.stepper li { counter-increment: s; display: flex; align-items: center; gap: 8px; padding: 6px 14px 6px 6px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-weight: 600; font-size: 14px; animation: stepglow 7.5s ease-in-out infinite; animation-delay: calc((var(--i, 0)) * 1.5s); }
+.stepper li::before { content: counter(s); width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-strong); color: var(--on-accent); font-size: 12px; }
+.stepper li:nth-child(1) { --i: 0; } .stepper li:nth-child(2) { --i: 1; } .stepper li:nth-child(3) { --i: 2; } .stepper li:nth-child(4) { --i: 3; } .stepper li:nth-child(5) { --i: 4; }
+@keyframes stepglow { 0%, 20%, 100% { box-shadow: none; } 8% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .stepper li { animation: none; } }
+
+/* ---- what's new: animated replica routing and idle eviction ---- */
+.new-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+@media (max-width: 860px) { .new-grid { grid-template-columns: 1fr; } }
+.badge-new { display: inline-block; font: 700 12px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--on-accent); background: var(--accent-strong); border-radius: 999px; padding: 3px 10px; }
+.req { fill: var(--accent); animation: req 6s ease-in-out infinite; }
+.req.r2 { animation-delay: -2s; } .req.r3 { animation-delay: -4s; }
+@keyframes req { 0% { transform: translate(0, 0); opacity: 0; } 8% { opacity: 1; } 55% { transform: translate(var(--dx, 230px), var(--dy, -40px)); opacity: 1; } 70%, 100% { transform: translate(var(--dx, 230px), var(--dy, -40px)); opacity: 0; } }
+.req.to-b { --dy: 40px; }
+.req.fail { fill: var(--red); animation: reqfail 6s ease-in-out infinite; }
+@keyframes reqfail { 0%, 38% { transform: translate(0, 0); opacity: 0; } 42% { opacity: 1; } 62% { transform: translate(230px, 40px); opacity: 1; } 70% { transform: translate(230px, 40px); opacity: 1; } 78%, 100% { transform: translate(230px, 40px); opacity: 0; } }
+.retry { fill: var(--green); animation: retry 6s ease-in-out infinite; }
+@keyframes retry { 0%, 68% { transform: translate(0, 0); opacity: 0; } 72% { opacity: 1; } 92% { transform: translate(230px, -40px); opacity: 1; } 100% { transform: translate(230px, -40px); opacity: 0; } }
+.idle-bar { transform-origin: left; animation: idle 8s linear infinite; }
+@keyframes idle { 0% { transform: scaleX(0); } 70%, 100% { transform: scaleX(1); } }
+.idle-mem { animation: idlemem 8s linear infinite; }
+@keyframes idlemem { 0%, 70% { opacity: 1; } 78%, 100% { opacity: .15; } }
+.idle-tag { animation: idletag 8s linear infinite; opacity: 0; }
+@keyframes idletag { 0%, 72% { opacity: 0; } 80%, 100% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .req, .req.fail, .retry, .idle-bar, .idle-mem, .idle-tag { animation: none; } .req { opacity: 1; transform: translate(230px, -40px); } .req.fail, .retry { opacity: 0; } .idle-bar { transform: scaleX(1); } .idle-mem { opacity: .15; } .idle-tag { opacity: 1; } }

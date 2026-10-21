@@ -18,11 +18,11 @@
 
 **Memory-aware admission** · **Live GPU cores** · **Model workbench** · **Owner-aware** · **Signed provenance** · **Source-available**
 
-🎮 **[Live demo](https://zyvorai.github.io/zyvor-gryvia-apple/demo/)** · 🌐 **[Site](https://zyvorai.github.io/zyvor-gryvia-apple/)** · 🚀 **[Quickstart](#quickstart)** · 🔒 **[Security](SECURITY.md)** · 📦 **[Releases](docs/RELEASE.md)** · 🧪 **[Results](TEST_RESULTS.md)**
+🎮 **[Live demo](https://zyvorai.github.io/zyvor-gryvia-apple/demo/)** · 🌐 **[Site](https://zyvorai.github.io/zyvor-gryvia-apple/)** · 🚀 **[Quickstart](#quickstart)** · 📖 **[Getting started](docs/GETTING-STARTED.md)** · 🔒 **[Security](SECURITY.md)** · 📦 **[Releases](docs/RELEASE.md)** · 🧪 **[Results](TEST_RESULTS.md)**
 
 </div>
 
-> **Zyvor AI Labs · 0.3.0 · BUSL-1.1.** Source-available (not OSI open source); each version converts to Apache-2.0 four years after its first public release. Copyright © 2026 Zyvor AI Labs Private Limited.
+> **Zyvor AI Labs · 0.4.0 · BUSL-1.1.** Source-available (not OSI open source); each version converts to Apache-2.0 four years after its first public release. Copyright © 2026 Zyvor AI Labs Private Limited.
 
 ## Why Gryvia
 
@@ -65,6 +65,8 @@ One GPU per Mac; GPU utilisation is device-wide, not per job; reservations are a
 
 Outbound agent inference relay, staged artifact locations with input checksums, live memory-pressure admission, a model-fit advisor, safer subprocess cleanup and seeded training splits are described in [Fleet reliability](docs/FLEET-RELIABILITY.md). They are built and tested on macOS 27.2 and run on a Mac mini. Relay between two physical Macs is not yet measured; see that page's validation status.
 
+**New in 0.4:** serve one model from several Macs (`gryvia deploy MODEL --node A --node B`, least-busy routing, one failover before the first byte), opt-in automatic idle eviction (`autoEvictIdleSeconds`), and an Idle deployments panel on the Overview. Step-by-step: [Getting started](docs/GETTING-STARTED.md). Cross-Mac replicas are not yet measured on two physical Macs.
+
 **Idle eviction.** `GET /api/models/idle` lists deployments with no gateway traffic within a window, and `POST /api/models/evict-idle` stops them to free their memory reservation. It is operator-triggered, with no autoscaler. `GET /api/capacity` gives the free and reserved GiB picture. See [Operations](docs/OPERATIONS.md#idle-eviction-and-capacity).
 
 ## Where it fits
@@ -73,4 +75,4 @@ Gryvia is not a way to split one model across Macs (see exo and MLX distributed 
 
 ## Docs
 
-[Architecture](docs/ARCHITECTURE.md) · [Operations](docs/OPERATIONS.md) · [UX contract](docs/UX-CONTRACT.md) · [Testing](docs/TESTING.md) · [Release](docs/RELEASE.md) · [Feature matrix](docs/FEATURE_MATRIX.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
+[Getting started](docs/GETTING-STARTED.md) · [Architecture](docs/ARCHITECTURE.md) · [Operations](docs/OPERATIONS.md) · [UX contract](docs/UX-CONTRACT.md) · [Testing](docs/TESTING.md) · [Release](docs/RELEASE.md) · [Feature matrix](docs/FEATURE_MATRIX.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)

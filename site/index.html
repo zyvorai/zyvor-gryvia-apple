@@ -22,11 +22,13 @@
 <nav class="top" aria-label="Primary">
   <div class="wrap">
     <a class="brand" href="#top"><img src="img/apple-touch-icon.png" alt="" width="26" height="26">Gryvia</a>
+    <a class="link hide-sm" href="#new">New</a>
     <a class="link hide-sm" href="#visible">GPUs</a>
     <a class="link hide-sm" href="#how">How it works</a>
     <a class="link hide-sm" href="#models">Models</a>
     <a class="link hide-sm" href="#owners">Owners</a>
     <a class="link hide-sm" href="#trust">Trust</a>
+    <a class="link" href="start/">Get started</a>
     <a class="link" href="#download">Download</a>
     <span class="sp"></span>
     <a class="btn ghost small" href="demo/">Live demo</a>
@@ -46,6 +48,7 @@
     <div class="cta">
       <a class="btn primary" href="#download">Download for macOS</a>
       <a class="btn ghost" href="demo/">Try the live demo</a>
+      <a class="btn ghost" href="start/">Get started</a>
     </div>
     <div class="facts"><span>macOS 15+ · Apple Silicon</span><span>Native Swift agent and app</span><span>Zero-dependency control plane</span><span>Source-available (BUSL-1.1)</span></div>
     <div class="hero-grid reveal" id="hero-grid" role="img" aria-label="Illustration: GPU cores lighting up in waves, as in the Live view"></div>
@@ -79,6 +82,41 @@
         <p class="note demo-label">Simulated fleet data from the built-in demo, not a customer fleet.</p>
       </div>
     </div>
+  </div>
+</section>
+
+<section id="new">
+  <div class="wrap">
+    <div class="eyebrow reveal"><span class="badge-new">New in 0.4</span></div>
+    <h2 class="reveal">Serve from more than one Mac. Free memory on its own.</h2>
+    <p class="sub reveal">One model can now run on several Macs behind the same endpoint, and idle deployments can stop themselves. Both are opt-in, and both are honest about what is not measured yet.</p>
+    <div class="new-grid">
+      <figure class="diagram reveal">
+        <svg viewBox="0 0 520 220" role="img" aria-labelledby="rep-t rep-d">
+          <title id="rep-t">Requests spread over two replicas, with one failover</title>
+          <desc id="rep-d">Requests leave the gateway toward two Macs. One request to the lower Mac fails in red and is retried on the upper Mac in green.</desc>
+          <rect class="d-card" x="14" y="80" width="110" height="60" rx="14"/><text class="d-text" x="69" y="116" text-anchor="middle">Gateway</text>
+          <rect class="d-card" x="370" y="22" width="130" height="62" rx="14"/><text class="d-text" x="435" y="50" text-anchor="middle">mini-01</text><text class="d-small" x="435" y="68" text-anchor="middle">replica</text>
+          <rect class="d-card" x="370" y="136" width="130" height="62" rx="14"/><text class="d-text" x="435" y="164" text-anchor="middle">mini-02</text><text class="d-small" x="435" y="182" text-anchor="middle">replica</text>
+          <g transform="translate(130 110)"><circle class="req" r="7"/><circle class="req r2 to-b" r="7"/><circle class="req fail" r="7"/><circle class="retry" r="7"/></g>
+        </svg>
+        <figcaption><strong>Replicas.</strong> <code>gryvia deploy MODEL --node A --node B</code>. Least-busy routing; one retry on another replica before the first byte. Not yet measured across two physical Macs.</figcaption>
+      </figure>
+      <figure class="diagram reveal">
+        <svg viewBox="0 0 520 220" role="img" aria-labelledby="idl-t idl-d">
+          <title id="idl-t">A model with no traffic is stopped and its memory freed</title>
+          <desc id="idl-d">A bar fills as a model sits idle. When it reaches the window the memory block fades and an evicted tag appears.</desc>
+          <text class="d-text" x="20" y="40">llama-3.2-1b</text>
+          <rect class="d-box" x="20" y="60" width="480" height="18" rx="9"/>
+          <rect class="d-accent idle-bar" x="20" y="60" width="480" height="18" rx="9"/>
+          <text class="d-small" x="20" y="100">no gateway traffic</text><text class="d-small" x="500" y="100" text-anchor="end">idle window</text>
+          <g class="idle-mem"><rect class="d-accent" x="20" y="130" width="150" height="46" rx="12"/><text x="95" y="158" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">4 GiB reserved</text></g>
+          <g class="idle-tag"><rect x="220" y="130" width="200" height="46" rx="12" fill="var(--green)"/><text x="320" y="158" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">evicted · memory freed</text></g>
+        </svg>
+        <figcaption><strong>Auto idle eviction.</strong> Set <code>autoEvictIdleSeconds</code> in <code>config.json</code>. Off by default. The model stays ready and is not redeployed for you.</figcaption>
+      </figure>
+    </div>
+    <div class="cta reveal" style="margin-top:28px"><a class="btn primary" href="start/">Get started: commands, in order</a><a class="btn ghost" href="demo/">See the Idle panel in the demo</a></div>
   </div>
 </section>
 
@@ -366,7 +404,7 @@ make run-agent
         <div class="cta" style="justify-content:flex-start"><a class="btn primary" href="https://github.com/zyvorai/zyvor-gryvia-apple/releases/latest">Releases</a><a class="btn ghost" href="https://github.com/zyvorai/zyvor-gryvia-apple">Source on GitHub</a></div>
         <pre data-copy="brew install --cask zyvorai/tap/gryvia" style="margin-top:14px"><span class="c"># when the tap is published</span>
 brew install --cask zyvorai/tap/gryvia
-shasum -a 256 -c Gryvia-0.3.0.dmg.sha256</pre>
+shasum -a 256 -c Gryvia-0.4.0.dmg.sha256</pre>
         <div class="callout" style="margin-top:12px">Release builds are <strong>ad hoc signed and not notarized</strong> unless the release notes say otherwise. On first launch use Control-click → Open, or System Settings → Privacy &amp; Security → Open Anyway, and verify the checksum.</div></div></div>
       <div class="tier reveal"><div><h3 style="margin:0 0 6px">Signed and notarized build for business use</h3>
         <p class="note" style="font-size:16px;margin:0 0 10px">Gryvia Apple is free for personal, non-business use. For business use, the signed and notarized build opens without a Gatekeeper warning and includes a licence for business and commercial use: <strong>₹420 including GST (about US$4.99)</strong>. No redistribution or resale. You get a GST invoice and a download link by email.</p>
@@ -385,7 +423,7 @@ shasum -a 256 -c Gryvia-0.3.0.dmg.sha256</pre>
     <details><summary>Is GPU utilisation per job?</summary><p>No. It is the whole Mac's GPU load as macOS reports it, including other apps. Reservations are admission bookkeeping, and energy figures are estimates.</p></details>
     <details><summary>Can I use a Mac that someone is also working on?</summary><p>Yes: set its policy to “only when I am away”. Work starts after the idle time you choose and yields when the owner returns. Battery, Low Power Mode and call guards apply.</p></details>
     <details><summary>What does it send where?</summary><p>Agents poll your control plane outbound. Nothing is sent to Zyvor. Models are downloaded only from huggingface.co or hf.co, with a size cap and a recorded SHA-256.</p></details>
-    <details><summary>Do deployed models hold memory forever?</summary><p>Only until you stop them. A deployment keeps its reservation while its serve job runs. Idle eviction lists deployments with no gateway traffic in a window you choose and stops them; run it by hand or from cron. There is no autoscaler, and the next request does not redeploy a model automatically.</p></details>
+    <details><summary>Do deployed models hold memory forever?</summary><p>Only until you stop them. A deployment keeps its reservation while its serve job runs. Idle eviction lists deployments with no gateway traffic in a window you choose and stops them: by hand from the dashboard, or automatically if you set <code>autoEvictIdleSeconds</code> (off by default). There is no autoscaler, and the next request does not redeploy a model automatically.</p></details>
     <details><summary>Which Macs and runtimes?</summary><p>Apple Silicon on macOS 15 or later. llama.cpp (GGUF), MLX and Core ML wrappers ship in the box, and runtimes are enabled per Mac in its own config.</p></details>
   </div>
 </section>

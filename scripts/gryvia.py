@@ -168,7 +168,7 @@ def doctor(client: Client) -> int:
     return 0 if ok else 1
 
 
-VERSION = "0.3.0"  # fallback; the VERSION file next to scripts/ wins
+VERSION = "0.4.0"  # fallback; the VERSION file next to scripts/ wins
 try:
     VERSION = (__import__("pathlib").Path(__file__).resolve().parents[1] / "VERSION").read_text().strip() or VERSION
 except OSError:

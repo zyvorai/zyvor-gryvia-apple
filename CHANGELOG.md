@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.0 — 2026-10-21
 
 - **Auto idle eviction (opt-in)**: `autoEvictIdleSeconds` / `--auto-evict-idle` runs the existing transactional idle eviction in the background (off by default, minimum 60 s). Dashboard **Idle deployments** panel on Overview shows capacity and what a window would evict, with a two-click Evict.
 - **Multi-replica deployments**: `gryvia deploy MODEL --node A --node B` serves one model from several Macs. Models carry `replicas`; the gateway routes to the least-busy live replica and fails over once before the first byte; one replica ending keeps the model deployed; `undeploy`, **Stop all** and idle eviction stop every replica. Not measured across two physical Macs.
@@ -9,16 +9,16 @@
 - **Hyperparameter sweeps**: one fine-tune fans out over a small grid (learning rate × LoRA layers × batch size, at most 12 runs) as ordinary queued training jobs; runs are ranked by validation loss with the best marked. Dashboard Sweep panel, `gryvia sweep` / `sweep-status` / `sweep-cancel`, `POST /api/sweeps`, `GET /api/sweeps/<id>`, MCP `gryvia_sweeps`, `gryvia_sweep` and (write) `gryvia_create_sweep`.
 - Idle-time harvesting, power/thermal policy and energy estimates, MCP server and App Intents, signed model provenance (in progress for 0.3.0).
 
-## v0.3.0 (unreleased)
+### Also included: v0.3.0 (packaged locally, never published)
 
-### Added
+#### Added
 - **Model workbench**: Hugging Face onboarding with SHA-256 and size cap, llama.cpp benchmarks, prompt-suite evaluation (GGUF and MLX/adapters), quantise, compare, streaming Playground.
 - **Training and run**: datasets, MLX LoRA fine-tuning with live loss, adapter fusing, workflows with dependencies, llama-server / mlx_lm.server deployments behind the gateway, tenant GiB-hour budgets, Prometheus `/metrics`.
 - **Live view**: GPU detection (one GPU per Mac; core count and measured utilisation from the IORegistry), real-time queue → admission → Mac flow, scheduler decision feed, SSE stream.
 - **Release engineering**: DMG, pkg and zip (`scripts/package-mac.sh`), server and SDK tarballs, `SHA256SUMS`, CycloneDX SBOM, Homebrew cask template, single-source `VERSION`.
 - **Brand and docs**: Zyvor blue tokens, G icon, macOS 27 system fonts, BUSL-1.1 headers, UX contract, security policy.
 
-### Fixed
+#### Fixed
 - Agent no longer deadlocks in `Process.waitUntilExit()` after a child exits.
 - Eval results larger than the 2,000-character log cap are assembled from per-case lines.
 - Cancelled or expired deployments clear their endpoint; MLX replicas route with `default_model`.
