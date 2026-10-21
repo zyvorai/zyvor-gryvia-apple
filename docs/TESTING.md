@@ -18,3 +18,13 @@
 ## What the tests deliberately do not claim
 
 GPU throughput, isolation, energy and fine-tuning quality are measured on specific machines and reported with caveats, not asserted in CI.
+
+## Design snapshots of the Mac app
+
+`GryviaDesktop --snapshot DIR [--server URL] [--token-env VAR]` renders every pane, light and dark, to PNGs in `DIR` and exits. It needs no screen-recording permission, uses the token from an environment variable (never the Keychain) and saves nothing. To review against fixture data:
+
+```bash
+python3 -m tests.browser_server &                       # fake fleet on :8765
+GRYVIA_ADMIN_TOKEN=browser-test-admin-token-00000000 \
+  native/.build/out/Products/Debug/GryviaDesktop --snapshot /tmp/gryvia-shots --server http://127.0.0.1:8765
+```

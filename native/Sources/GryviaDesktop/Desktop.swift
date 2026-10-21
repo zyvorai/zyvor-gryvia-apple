@@ -51,7 +51,11 @@ enum Pane: String, CaseIterable, Identifiable {
     var state: Snapshot?
     var error = ""
     var server = UserDefaults.standard.string(forKey: "server") ?? "http://127.0.0.1:8443"
-    var token = TokenStore.load() { didSet { if token != oldValue { TokenStore.save(token) } } }
+    var token = TokenStore.load() { didSet { if token != oldValue && !snapshotOnly { TokenStore.save(token) } } }
+    /// Snapshot mode: never touches the Keychain or UserDefaults.
+    private var snapshotOnly = false
+    init() {}
+    init(snapshotServer: String, token: String) { snapshotOnly = true; server = snapshotServer; self.token = token }
     var model = ""
     var runtime = "demo"
     var memory = 4.0
@@ -623,8 +627,8 @@ struct DeploymentsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Models served by llama-server or mlx_lm.server on a Mac. Replicas bind to loopback and are reachable from the control-plane Mac.")
-                    .foregroundStyle(.secondary)
+                PaneHeader(title: "Deployments", subtitle: "Models served by llama-server or mlx_lm.server on a Mac. Replicas bind to loopback and are reachable from the control-plane Mac.",
+                           trailing: "\(models.filter { !($0.endpoints ?? []).isEmpty }.count) serving")
                 if models.isEmpty {
                     ContentUnavailableView("Nothing to deploy yet", systemImage: "arrow.up.forward.app", description: Text("Onboard a GGUF model in the Model hub first."))
                 }
@@ -700,7 +704,11 @@ struct ContentView: View {
         return NSApp.applicationIconImage
     }()
     @Bindable var fleet: Fleet
-    @State private var section: Pane? = Pane(rawValue: UserDefaults.standard.string(forKey: "startSection") ?? "") ?? .live
+    @State private var section: Pane?
+    init(fleet: Fleet, start: Pane? = nil) {
+        self.fleet = fleet
+        _section = State(initialValue: start ?? Pane(rawValue: UserDefaults.standard.string(forKey: "startSection") ?? "") ?? .live)
+    }
     @AppStorage("welcomeHidden") private var welcomeHidden = false
     @State private var filter = ""
     @State private var selected: Job?
@@ -837,22 +845,36 @@ struct ContentView: View {
     }
 
     var fleetList: some View {
-        List((fleet.state?.nodes ?? []).filter { filter.isEmpty || $0.id.localizedCaseInsensitiveContains(filter) }) { n in
-            HStack {
-                Image(systemName: "desktopcomputer").foregroundStyle(n.online ? .green : .secondary)
-                VStack(alignment: .leading) {
-                    Text(n.id).bold()
-                    Text(Self.nodeDetail(n))
-                        .font(.caption).foregroundStyle(.secondary)
+        let nodes = (fleet.state?.nodes ?? []).filter { filter.isEmpty || $0.id.localizedCaseInsensitiveContains(filter) }
+        let online = nodes.filter(\.online).count
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                PaneHeader(title: "Fleet", subtitle: "Each Mac running the Gryvia agent, and when it may take work.", trailing: "\(online) of \(nodes.count) online")
+                if nodes.isEmpty { ContentUnavailableView("No Macs yet", systemImage: "desktopcomputer", description: Text("Run `make run-agent` on a Mac to enrol it.")) }
+                ForEach(nodes) { n in
+                    HStack(spacing: 14) {
+                        Image(systemName: "desktopcomputer").font(.title2).foregroundStyle(n.online ? .green : .secondary).frame(width: 32)
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(n.id).font(.headline)
+                            Text([n.gpuModel, n.gpuCores.map { "\($0) GPU cores" }, n.totalGiB.map { String(format: "%.0f GiB unified memory", $0) }].compactMap { $0 }.joined(separator: " · "))
+                                .font(.caption).foregroundStyle(.secondary)
+                            HStack(spacing: 6) {
+                                Chip(text: String(format: "%.0f GiB budget", n.budgetGiB), color: .accentColor)
+                                ForEach(n.runtimes, id: \.self) { Chip(text: $0) }
+                                if let t = n.thermal { Chip(text: "thermal " + t, color: ["serious", "critical"].contains(t) ? .red : .green) }
+                                if let g = n.gate, !g.allowed { Chip(text: g.reason, color: .orange) }
+                            }
+                        }
+                        Spacer()
+                        Picker("Work", selection: Binding(get: { n.policy?.mode ?? "always" }, set: { m in Task { await fleet.setPolicy(node: n, mode: m) } })) {
+                            Text("Always").tag("always"); Text("When I'm away").tag("idle"); Text("Paused").tag("paused")
+                        }.labelsHidden().frame(width: 140)
+                        Chip(text: n.drain ? "Draining" : (n.online ? "Online" : "Offline"), color: n.drain ? .orange : (n.online ? .green : .secondary))
+                        Button(n.drain ? "Resume" : "Drain") { Task { await fleet.action("api/drain", ["id": n.id, "drain": !n.drain]) } }
+                    }
+                    .padding(16).card()
                 }
-                Spacer()
-                if let g = n.gate, !g.allowed { Text(g.reason).font(.caption).foregroundStyle(.orange) }
-                Picker("Work", selection: Binding(get: { n.policy?.mode ?? "always" }, set: { m in Task { await fleet.setPolicy(node: n, mode: m) } })) {
-                    Text("Always").tag("always"); Text("When I'm away").tag("idle"); Text("Paused").tag("paused")
-                }.labelsHidden().frame(width: 140)
-                Text(n.drain ? "Draining" : (n.online ? "Online" : "Offline")).foregroundStyle(.secondary)
-                Button(n.drain ? "Resume" : "Drain") { Task { await fleet.action("api/drain", ["id": n.id, "drain": !n.drain]) } }
-            }
+            }.padding(24)
         }
     }
 
@@ -862,7 +884,12 @@ struct ContentView: View {
                 || $0.id.localizedCaseInsensitiveContains(filter) || $0.tenant.localizedCaseInsensitiveContains(filter)
                 || $0.state.localizedCaseInsensitiveContains(filter)
         }
-        return ScrollView { jobRows(jobs).padding(24) }
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                PaneHeader(title: "Workloads", subtitle: "Every job, newest first. Click one to read its logs.", trailing: "\(jobs.count) shown")
+                jobRows(jobs).padding(.horizontal, 16).card()
+            }.padding(24)
+        }
     }
 
     func jobRows(_ jobs: [Job]) -> some View {
@@ -914,20 +941,40 @@ struct ContentView: View {
             if items.isEmpty {
                 ContentUnavailableView("All clear", systemImage: "checkmark.seal", description: Text("No offline Macs, thermal limits or failed jobs."))
             } else {
-                List(items) { a in
-                    HStack {
-                        Image(systemName: a.level == .error ? "exclamationmark.octagon.fill" : "info.circle.fill").foregroundStyle(a.level == .error ? .red : .secondary)
-                        VStack(alignment: .leading) { Text(a.title).bold(); Text(a.detail).font(.caption).foregroundStyle(.secondary) }
-                    }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        PaneHeader(title: "Alerts", subtitle: "Things that need a look: offline Macs, thermal limits, failed jobs.", trailing: "\(items.count) open")
+                        ForEach(items) { a in
+                            let tone: Color = a.level == .error ? .red : .secondary
+                            HStack(spacing: 12) {
+                                Image(systemName: a.level == .error ? "exclamationmark.octagon.fill" : "info.circle.fill").font(.title3).foregroundStyle(tone)
+                                VStack(alignment: .leading, spacing: 2) { Text(a.title).font(.headline); Text(a.detail).font(.callout).foregroundStyle(.secondary) }
+                                Spacer()
+                            }
+                            .padding(14).card()
+                            .overlay(alignment: .leading) { Capsule().fill(tone).frame(width: 3).padding(.vertical, 10).padding(.leading, 5) }
+                        }
+                    }.padding(24)
                 }
             }
         }
     }
 
     var tenants: some View {
-        List(fleet.state?.tenants ?? []) { t in
-            let detail = String(format: "Quota %.1f GiB · weight %.1f", t.quota, t.weight)
-            HStack { Text(t.id).bold(); Spacer(); Text(detail).foregroundStyle(.secondary) }
+        let list = fleet.state?.tenants ?? []
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                PaneHeader(title: "Tenants", subtitle: "A memory allowance and a fairness weight per team.", trailing: "\(list.count) total")
+                ForEach(list) { t in
+                    let used = (fleet.state?.jobs ?? []).filter { $0.tenant == t.id && ["running", "cancelling"].contains($0.state) }.reduce(0) { $0 + $1.spec.memoryGiB }
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack { Text(t.id).font(.headline); Spacer(); Chip(text: String(format: "weight %.1f", t.weight)) }
+                        ProgressView(value: min(used, max(t.quota, 0.1)), total: max(t.quota, 0.1)).tint(used > t.quota ? .red : .accentColor)
+                        Text(String(format: "%.1f of %.1f GiB reserved (bookkeeping, not GPU use)", used, t.quota)).font(.caption).foregroundStyle(.secondary)
+                    }
+                    .padding(16).card()
+                }
+            }.padding(24)
         }
     }
 }
@@ -999,6 +1046,7 @@ struct SettingsView: View {
 
 @main struct GryviaDesktop: App {
     @State private var fleet = Fleet()
+    private let snapshot = DesignSnapshot.options()
     @AppStorage("accent") private var accent = "blue"
     @AppStorage("refreshSeconds") private var refreshSeconds = 5
     var body: some Scene {
@@ -1007,6 +1055,7 @@ struct SettingsView: View {
                 .tint(Color.accent(named: accent))
                 .onAppear { NSApplication.shared.applicationIconImage = ContentView.brandIcon }   // Dock tile: do not depend on the LaunchServices icon cache
                 .task {
+                    if let snapshot { await DesignSnapshot.run(snapshot); return }
                     if Fleet.canNotify { _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) }
                     while !Task.isCancelled {
                         if !fleet.token.isEmpty { await fleet.refresh() }
