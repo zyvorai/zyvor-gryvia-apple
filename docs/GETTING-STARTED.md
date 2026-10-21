@@ -14,6 +14,8 @@ make doctor                # checks the server, your token and that an agent reg
 open http://127.0.0.1:8443 # paste GRYVIA_ADMIN_TOKEN from local/credentials.env
 ```
 
+Prefer an installed app? `brew install --cask zyvorai/tap/gryvia` installs the notarized `Gryvia.app` (Apple silicon, macOS 15+); This guide uses a source checkout, so the `make` and `scripts/gryvia.py` commands need the repository.
+
 Press **Run demo job** in the dashboard to see admission, a lease and a result. `python3 scripts/gryvia.py quickstart` always tells you the next step.
 
 Load the tokens into your shell for the CLI and curl:
