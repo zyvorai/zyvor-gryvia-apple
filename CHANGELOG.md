@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.4.2 — 2026-10-21
+
+- **Mac app**: clearer About window: a product statement, an honest-numbers line and a shorter licence line.
+
 ## v0.4.1 — 2026-10-21
 
 - **Mac app**: a darker, glassier dark theme (black page, blue bloom, glass cards, one surface for sidebar, toolbar and page); hero headers with a ring gauge and utilisation trend on Live, Overview, Fleet, Model hub and Workloads; card layouts for every list pane; About window and a one-time Welcome sheet with an animated queue → admission → Macs illustration; teaching empty states; a job timeline with a plain-language "why it is waiting"; glossary popovers; a command palette (⌘K) and ⌘1…⌘0 pane shortcuts. `GryviaDesktop --snapshot DIR` renders every pane for design review (see `docs/TESTING.md`).
