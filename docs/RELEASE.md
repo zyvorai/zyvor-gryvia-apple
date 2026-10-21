@@ -10,6 +10,13 @@ https://github.com/zyvorai/zyvor-gryvia-apple/releases/tag/v0.4.0. Folds in the 
 - **How the assets got there:** the release workflow created the release and tarballs; its Mac job had no signing secrets, so the DMG, pkg and zip (and their checksums) were replaced with the locally built, notarized ones using `gh release upload --clobber`.
 - **Homebrew:** `Casks/gryvia.rb` is in `zyvorai/homebrew-tap` (0.4.0, checksum equal to the `.sha256` file and GitHub's asset digest, `brew style` clean). `brew audit --cask --online --strict zyvorai/tap/gryvia` passes with no offenses, and `brew install --cask zyvorai/tap/gryvia` installed `Gryvia.app` 0.4.0 on the MacBook (macOS 27.2); `spctl` reports "Notarized Developer ID". The installed app has no stapled ticket of its own (only the DMG does), so Gatekeeper checks Apple's records online on first launch.
 
+## v0.4.3 (published 21 October 2026)
+
+https://github.com/zyvorai/zyvor-gryvia-apple/releases/tag/v0.4.3. New app icon only (PR #44); the web favicon matches.
+
+- **Verified (MacBook, macOS 27.2):** CI on PRs #44 and #45 (control-plane, native, site, web). `Gryvia-0.4.3.dmg` was signed with the Developer ID Application identity, accepted by Apple's notary service and stapled; the published DMG, pkg and zip match their `.sha256` files after download, `stapler validate` passes and `spctl` reports "Notarized Developer ID" for the DMG and the installed app. `brew audit --cask --online --strict zyvorai/tap/gryvia` passes, `brew upgrade --cask` installed 0.4.3, the app launches, and `gryvia.py doctor` passes against the local server. The icon was checked as a render of the `.icns`.
+- **Not verified:** the icon in the Dock and the DMG window, and everything listed as not verified under v0.4.1 (live window, shortcuts and palette, Welcome sheet on a fresh profile). The pkg is unsigned and the zip is not notarized separately.
+
 ## v0.4.2 (published 21 October 2026)
 
 https://github.com/zyvorai/zyvor-gryvia-apple/releases/tag/v0.4.2. Clearer About window copy only (PR #41).
