@@ -397,7 +397,7 @@ struct ModelHubView: View {
                     Button("Onboard a model", systemImage: "arrow.down.circle") { showOnboard = true }.buttonStyle(.borderedProminent)
                 }
                 if models.isEmpty {
-                    ContentUnavailableView("No models yet", systemImage: "cube", description: Text("Press “Onboard a model” to download one onto a Mac."))
+                    TeachingEmpty(symbol: "cube", title: "No models yet", what: "A model is a file a Mac can run, like a GGUF or an MLX folder. Onboarding downloads one, checks its checksum and reserves nothing until you deploy it.", next: "Press “Onboard a model”")
                 }
                 ForEach(models) { m in
                     VStack(alignment: .leading, spacing: 10) {
@@ -517,8 +517,7 @@ struct TrainingView: View {
                     Button("New fine-tune", systemImage: "plus") { showNew = true }.buttonStyle(.borderedProminent)
                 }
                 if runs.isEmpty {
-                    ContentUnavailableView("No training runs yet", systemImage: "chart.line.uptrend.xyaxis",
-                                           description: Text("Add a dataset in the web dashboard (or `gryvia.py dataset-add`), then start a fine-tune."))
+                    TeachingEmpty(symbol: "chart.line.uptrend.xyaxis", title: "No training runs yet", what: "A fine-tune adapts a model to your data on one Mac (LoRA). It needs a dataset and a ready MLX model.", next: "Add a dataset with the web dashboard or `gryvia.py dataset-add`")
                 }
                 ForEach(runs) { j in
                     Button { selected = j.id; Task { await load(j.id) } } label: {
@@ -630,7 +629,7 @@ struct DeploymentsView: View {
                 PaneHeader(title: "Deployments", eyebrow: "Run", subtitle: "Models served by llama-server or mlx_lm.server on a Mac. Replicas bind to loopback and are reachable from the control-plane Mac.",
                            trailing: "\(models.filter { !($0.endpoints ?? []).isEmpty }.count) serving")
                 if models.isEmpty {
-                    ContentUnavailableView("Nothing to deploy yet", systemImage: "arrow.up.forward.app", description: Text("Onboard a GGUF model in the Model hub first."))
+                    TeachingEmpty(symbol: "arrow.up.forward.app", title: "Nothing to deploy yet", what: "Deploying runs a model server on a Mac so apps can call it through one endpoint. It needs a ready model first.", next: "Onboard a GGUF model in the Model hub")
                 }
                 ForEach(models) { m in
                     let live = !(m.endpoints ?? []).isEmpty
@@ -716,8 +715,18 @@ struct ContentView: View {
     @State private var filter = ""
     @State private var selected: Job?
     @State private var showSubmit = false
+    @State private var showPalette = false
 
     @Environment(\.colorScheme) private var scheme
+
+    private var paletteCommands: [PaletteCommand] {
+        var list = Pane.allCases.map { p in PaletteCommand(title: "Go to \(p.rawValue)", symbol: p.symbol) { section = p } }
+        list.append(PaletteCommand(title: "Run demo job", symbol: "play.fill") { Task { await fleet.runDemo() } })
+        list.append(PaletteCommand(title: "Submit a workload", symbol: "plus") { showSubmit = true })
+        list.append(PaletteCommand(title: "Refresh", symbol: "arrow.clockwise") { Task { await fleet.refresh() } })
+        list.append(PaletteCommand(title: "Show the welcome screen", symbol: "hand.wave") { UserDefaults.standard.set(false, forKey: "welcomeSeen") })
+        return list
+    }
 
     /// One sidebar row. In dark the system vibrancy layer is masked (see WindowStyle.flatten), which also removes the system
     /// icon tint and selection, so draw both here from the brand accent.
@@ -768,6 +777,7 @@ struct ContentView: View {
                 ToolbarItem { Button("Run demo job", systemImage: "play.fill") { Task { await fleet.runDemo() } }.disabled(fleet.token.isEmpty).help("Send a 3-second test job to your Macs") }
                 ToolbarItem { Button("Submit", systemImage: "plus") { showSubmit = true }.disabled(fleet.token.isEmpty).help("Submit a workload") }
                 ToolbarItem { Button("Refresh", systemImage: "arrow.clockwise") { Task { await fleet.refresh() } } }
+                ToolbarItem { Button("Command palette", systemImage: "command") { showPalette = true }.keyboardShortcut("k", modifiers: .command).help("Command palette (⌘K)") }
             }
             .background { AmbientBackground() }
             .searchable(text: $filter, prompt: "Filter jobs, nodes, tenants")
@@ -776,6 +786,13 @@ struct ContentView: View {
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .sheet(isPresented: Binding(get: { offersWelcome && !welcomeSeen }, set: { if !$0 { welcomeSeen = true } })) {
             WelcomeView(onDone: { welcomeSeen = true }, onConnect: { welcomeSeen = true; section = .guide })
+        }
+        .sheet(isPresented: $showPalette) { PaletteView(commands: paletteCommands) { showPalette = false } }
+        .background {
+            // ⌘1…⌘9 and ⌘0 switch panes
+            ForEach(Array(Pane.allCases.enumerated()), id: \.offset) { i, p in
+                Button(p.rawValue) { section = p }.keyboardShortcut(KeyEquivalent(Character(String((i + 1) % 10))), modifiers: .command).hidden()
+            }
         }
         .sheet(isPresented: $showSubmit) { SubmitSheet(fleet: fleet) }
         .sheet(item: $selected) { job in JobDetail(fleet: fleet, job: job) }
@@ -890,7 +907,7 @@ struct ContentView: View {
                            sentence: "Each Mac running the Gryvia agent, and when it may take work. \(nodes.count - online) offline.",
                            chips: [("\(nodes.reduce(0) { $0 + ($1.gpuCores ?? 0) })", "GPU cores"), (String(format: "%.0f GiB", nodes.filter(\.online).reduce(0) { $0 + $1.budgetGiB }), "budget")],
                            ring: utils.isEmpty ? nil : (utils.reduce(0, +) / Double(utils.count) / 100, String(format: "%.0f%%", utils.reduce(0, +) / Double(utils.count)), "GPU busy"))
-                if nodes.isEmpty { ContentUnavailableView("No Macs yet", systemImage: "desktopcomputer", description: Text("Run `make run-agent` on a Mac to enrol it.")) }
+                if nodes.isEmpty { TeachingEmpty(symbol: "desktopcomputer", title: "No Macs yet", what: "A Mac joins the fleet by running the Gryvia agent. It reports its GPU, memory and thermal state, and takes jobs that fit.", next: "Run `make run-agent` on a Mac") }
                 ForEach(nodes) { n in
                     HStack(spacing: 14) {
                         Image(systemName: "desktopcomputer").font(.title2).foregroundStyle(n.online ? .green : .secondary).frame(width: 32)
@@ -1036,13 +1053,21 @@ struct JobDetail: View {
                 Button("Done") { dismiss() }
             }
             Text("\(job.id) · tenant \(job.tenant) · node \(job.node ?? "—") · attempt \(job.attempt)").font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            JobTimeline(job: job)
+            if !job.reason.isEmpty {
+                VStack(alignment: .leading, spacing: 3) {
+                    Label(job.state == "queued" ? "Why it is waiting" : "Last scheduler note", systemImage: "info.circle").font(.callout.weight(.semibold))
+                    Text(ReasonText.explain(job.reason) ?? job.reason).font(.callout).foregroundStyle(.secondary)
+                    if ReasonText.explain(job.reason) != nil { Text("Scheduler said: \(job.reason)").font(.caption.monospaced()).foregroundStyle(.tertiary) }
+                }.frame(maxWidth: .infinity, alignment: .leading).padding(10).card(radius: 10)
+            }
             ScrollView {
                 Text(shown.isEmpty ? "No log output yet." : shown.map(\.text).joined(separator: "\n"))
                     .font(.system(.footnote, design: .monospaced)).textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(10)
-            }.background(.quaternary, in: .rect(cornerRadius: 10))
+            }.card(radius: 10)
         }
-        .padding(20).frame(width: 640, height: 460)
+        .padding(20).frame(width: 640, height: 560).background { AmbientBackground() }
         .task { while !Task.isCancelled { await fleet.loadLogs(job.id); try? await Task.sleep(for: .seconds(2)) } }
     }
 }
