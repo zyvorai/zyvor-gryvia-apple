@@ -2,6 +2,8 @@
 
 Gryvia schedules jobs across your Macs and serves models from them behind one OpenAI-style endpoint. This page takes you from nothing to a model answering requests, then to two replicas and automatic cleanup. Everything below uses commands that ship in this repository.
 
+**Licence in one line:** reading, building, evaluating and testing is free; running it for real work needs a plan (see the [pricing](https://zyvorai.github.io/zyvor-gryvia-apple/#download)). `LICENSE` is the authority.
+
 **You need:** Apple Silicon Mac(s) on macOS 15+, Python 3.14 for the control plane (standard library only), Xcode command-line tools to build the agent. A second Mac is optional.
 
 ## 1. Run the control plane and an agent (5 minutes)
