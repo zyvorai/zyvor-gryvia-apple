@@ -101,9 +101,13 @@ struct AboutView: View {
                 Text("by Zyvor AI Labs").foregroundStyle(.secondary)
             }
             Text(Product.tagline).font(.headline)
+            Text("Your Macs, scheduled. Gryvia places inference, fine-tuning and benchmark jobs on the Mac that has the memory for them, with quotas, owner-aware policy and signed provenance.")
+                .font(.callout).multilineTextAlignment(.center).frame(width: 360)
             FleetIllustration().frame(width: 360)
             Text(Product.version.first?.isNumber == true ? "Version \(Product.version)" : Product.version.capitalized).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-            Text("Source-available under the Business Source License 1.1: free to read, build and test; a paid plan is needed to run it for real work. Each version converts to Apache-2.0 four years after its first public release.")
+            Text("Numbers shown are as measured: GPU use is device-wide, reservations are bookkeeping, and energy is an estimate.")
+                .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(width: 360)
+            Text("Source-available under BUSL-1.1: free to read, build and test, paid to run for real work. Each version becomes Apache-2.0 four years after its first public release.")
                 .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(width: 360)
             HStack(spacing: 16) {
                 Link("Website", destination: Product.site); Link("Live demo", destination: Product.demo)
