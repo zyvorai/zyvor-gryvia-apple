@@ -231,13 +231,11 @@ struct LiveView: View {
         let used = online.reduce(0) { $0 + reserved($1) }
         let utils = online.compactMap(\.gpuUtilPct)
         let avg = utils.isEmpty ? nil : utils.reduce(0, +) / Double(utils.count)
-        return HStack(spacing: 14) {
-            tile("\(online.count)", "Macs online")
-            tile("\(online.count)", online.count == 1 ? "GPU (1 per Mac)" : "GPUs (1 per Mac)")
-            tile(cores == 0 ? "—" : "\(cores)", "GPU cores")
-            tile(String(format: "%.0f / %.0f", used, budget), "GiB reserved")
-            tile(avg.map { String(format: "%.0f%%", $0) } ?? "—", "GPU busy, avg")
-        }
+        return HeroHeader(eyebrow: "Live", figure: cores == 0 ? "\(online.count)" : "\(cores)", unit: cores == 0 ? "Macs online" : "GPU cores",
+                          sentence: "across \(online.count) online \(online.count == 1 ? "Mac" : "Macs"). One GPU per Mac; utilisation is device-wide, as macOS reports it.",
+                          chips: [("\(fleet.running)", "running"), ("\(fleet.queued)", "queued"), (String(format: "%.0f of %.0f GiB", used, budget), "reserved")],
+                          ring: avg.map { ($0 / 100, String(format: "%.0f%%", $0), "GPU busy") },
+                          trend: fleetUtilSeries(fleet.telemetry, nodes: fleet.state?.nodes ?? []))
     }
     func tile(_ value: String, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -390,9 +388,12 @@ struct ModelHubView: View {
         let models = fleet.state?.models ?? []
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
+                let best = fleet.results.filter { $0.kind == "benchmark" && $0.body.success == true }.compactMap(\.body.generationTokensPerSecond).max()
                 HStack(alignment: .top) {
-                    PaneHeader(title: "Model hub", eyebrow: "Build", subtitle: "Bring a model onto your Macs, check it fits, benchmark it, and test it.",
-                               trailing: "\(models.filter(\.isReady).count) ready · \(models.filter { !($0.endpoints ?? []).isEmpty }.count) serving")
+                    HeroHeader(eyebrow: "Model hub", figure: best.map { String(format: "%.0f", $0) } ?? "\(models.filter(\.isReady).count)",
+                               unit: best == nil ? "ready" : "tok/s best generation",
+                               sentence: best == nil ? "Bring a model onto your Macs, check it fits, benchmark it, and test it." : "Fastest measured generation across your benchmarked models.",
+                               chips: [("\(models.filter(\.isReady).count)", "ready"), ("\(models.filter { !($0.endpoints ?? []).isEmpty }.count)", "serving")])
                     Button("Onboard a model", systemImage: "arrow.down.circle") { showOnboard = true }.buttonStyle(.borderedProminent)
                 }
                 if models.isEmpty {
@@ -716,21 +717,36 @@ struct ContentView: View {
     @State private var selected: Job?
     @State private var showSubmit = false
 
+    @Environment(\.colorScheme) private var scheme
+
+    /// One sidebar row. In dark the system vibrancy layer is masked (see WindowStyle.flatten), which also removes the system
+    /// icon tint and selection, so draw both here from the brand accent.
+    @ViewBuilder private func sidebarRow(_ s: Pane) -> some View {
+        let picked = section == s
+        let dark = scheme == .dark
+        HStack {
+            Label { Text(s.rawValue) } icon: {
+                Image(systemName: s.symbol).foregroundStyle(dark ? (picked ? Theme.accentGlow : Color.secondary) : Color.accentColor)
+            }
+            if s == .alerts, !fleet.alerts.isEmpty { Spacer(); Text("\(fleet.alerts.count)").font(.caption2.bold()).padding(.horizontal, 6).background(.red, in: .capsule).foregroundStyle(.white) }
+        }
+        .tag(s)
+        .listRowBackground(dark && picked ? RoundedRectangle(cornerRadius: 8).fill(Theme.accent.opacity(0.22)).padding(.horizontal, 6) : nil)
+    }
+
     var body: some View {
         NavigationSplitView {
             List(selection: $section) {
-                Label(Pane.guide.rawValue, systemImage: Pane.guide.symbol).tag(Pane.guide)
+                sidebarRow(.guide)
                 ForEach(Pane.groups, id: \.0) { group in
                     Section(group.0) {
                         ForEach(group.1) { s in
-                            HStack {
-                                Label(s.rawValue, systemImage: s.symbol)
-                                if s == .alerts, !fleet.alerts.isEmpty { Spacer(); Text("\(fleet.alerts.count)").font(.caption2.bold()).padding(.horizontal, 6).background(.red, in: .capsule).foregroundStyle(.white) }
-                            }.tag(s)
+                            sidebarRow(s)
                         }
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
             .safeAreaInset(edge: .top) {
                 HStack(spacing: 10) {
                     BrandMark(size: 32)
@@ -757,6 +773,7 @@ struct ContentView: View {
             .searchable(text: $filter, prompt: "Filter jobs, nodes, tenants")
         }
         .frame(minWidth: 960, minHeight: 640)
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .sheet(isPresented: Binding(get: { offersWelcome && !welcomeSeen }, set: { if !$0 { welcomeSeen = true } })) {
             WelcomeView(onDone: { welcomeSeen = true }, onConnect: { welcomeSeen = true; section = .guide })
         }
@@ -805,6 +822,7 @@ struct ContentView: View {
     var overview: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                overviewHero
                 if showWelcome { welcomeCard }
                 HStack(spacing: 16) {
                     Metric(label: "Macs online", value: fleet.state?.nodes.filter(\.online).count ?? 0, symbol: "desktopcomputer")
@@ -816,6 +834,18 @@ struct ContentView: View {
                 jobRows(Array((fleet.state?.jobs ?? []).prefix(8)))
             }.padding(24)
         }
+    }
+
+    var overviewHero: some View {
+        let on = (fleet.state?.nodes ?? []).filter(\.online)
+        let budget = on.reduce(0) { $0 + $1.budgetGiB }
+        let used = (fleet.state?.jobs ?? []).filter { j in on.contains { $0.id == j.node } && ["running", "cancelling"].contains(j.state) }.reduce(0) { $0 + $1.spec.memoryGiB }
+        let done = fleet.state?.jobs.filter { $0.state == "succeeded" }.count ?? 0
+        let failed = fleet.state?.jobs.filter { $0.state == "failed" }.count ?? 0
+        return HeroHeader(eyebrow: "Overview", figure: "\(fleet.running)", unit: fleet.running == 1 ? "job running" : "jobs running",
+                          sentence: fleet.queued == 0 ? "Nothing is waiting for admission." : "\(fleet.queued) waiting for admission across \(on.count) \(on.count == 1 ? "Mac" : "Macs").",
+                          chips: [("\(done)", "completed"), ("\(failed)", "failed")],
+                          ring: budget > 0 ? (used / budget, String(format: "%.0f%%", 100 * used / budget), "memory reserved") : nil)
     }
 
     static func nodeDetail(_ n: Node) -> String {
@@ -855,7 +885,11 @@ struct ContentView: View {
         let online = nodes.filter(\.online).count
         return ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                PaneHeader(title: "Fleet", eyebrow: "Monitor", subtitle: "Each Mac running the Gryvia agent, and when it may take work.", trailing: "\(online) of \(nodes.count) online")
+                let utils = nodes.filter(\.online).compactMap(\.gpuUtilPct)
+                HeroHeader(eyebrow: "Fleet", figure: "\(online)", unit: online == 1 ? "Mac online" : "Macs online",
+                           sentence: "Each Mac running the Gryvia agent, and when it may take work. \(nodes.count - online) offline.",
+                           chips: [("\(nodes.reduce(0) { $0 + ($1.gpuCores ?? 0) })", "GPU cores"), (String(format: "%.0f GiB", nodes.filter(\.online).reduce(0) { $0 + $1.budgetGiB }), "budget")],
+                           ring: utils.isEmpty ? nil : (utils.reduce(0, +) / Double(utils.count) / 100, String(format: "%.0f%%", utils.reduce(0, +) / Double(utils.count)), "GPU busy"))
                 if nodes.isEmpty { ContentUnavailableView("No Macs yet", systemImage: "desktopcomputer", description: Text("Run `make run-agent` on a Mac to enrol it.")) }
                 ForEach(nodes) { n in
                     HStack(spacing: 14) {
@@ -892,7 +926,9 @@ struct ContentView: View {
         }
         return ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                PaneHeader(title: "Workloads", eyebrow: "Run", subtitle: "Every job, newest first. Click one to read its logs.", trailing: "\(jobs.count) shown")
+                HeroHeader(eyebrow: "Workloads", figure: "\(fleet.running)", unit: fleet.running == 1 ? "running" : "running now",
+                           sentence: "Every job, newest first. Click one to read its logs. \(jobs.count) shown.",
+                           chips: [("\(fleet.queued)", "queued"), ("\(fleet.state?.jobs.filter { $0.state == "succeeded" }.count ?? 0)", "succeeded"), ("\(fleet.state?.jobs.filter { $0.state == "failed" }.count ?? 0)", "failed")])
                 jobRows(jobs).padding(.horizontal, 16).card()
             }.padding(24)
         }
@@ -945,7 +981,7 @@ struct ContentView: View {
         let items = fleet.alerts
         return Group {
             if items.isEmpty {
-                ContentUnavailableView("All clear", systemImage: "checkmark.seal", description: Text("No offline Macs, thermal limits or failed jobs."))
+                AllClear()
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
@@ -1059,7 +1095,13 @@ struct SettingsView: View {
         WindowGroup {
             ContentView(fleet: fleet)
                 .tint(Color.accent(named: accent))
-                .onAppear { NSApplication.shared.applicationIconImage = ContentView.brandIcon }   // Dock tile: do not depend on the LaunchServices icon cache
+                .onAppear {
+                    NSApplication.shared.applicationIconImage = ContentView.brandIcon   // Dock tile: do not depend on the LaunchServices icon cache
+                    // Started from a terminal (swift run, a bare binary) the app is not frontmost, so keystrokes would go to the terminal.
+                    NSApplication.shared.setActivationPolicy(.regular)
+                    NSApplication.shared.activate(ignoringOtherApps: true)
+                    if let w = NSApplication.shared.windows.first { WindowStyle.apply(w); w.makeKeyAndOrderFront(nil); WindowStyle.flattenLater(w) }
+                }
                 .task {
                     if let snapshot { await DesignSnapshot.run(snapshot); return }
                     if Fleet.canNotify { _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) }

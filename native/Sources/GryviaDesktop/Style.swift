@@ -5,6 +5,32 @@ import SwiftUI
 import AppKit
 import GryviaCore
 
+/// One window chrome for the app and the snapshots: transparent title bar so the page background runs edge to edge.
+enum WindowStyle {
+    @MainActor static func apply(_ w: NSWindow) {
+        w.titlebarAppearsTransparent = true
+        w.styleMask.insert(.fullSizeContentView)
+        w.backgroundColor = NSColor(name: nil) { $0.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .black : .windowBackgroundColor }
+    }
+}
+
+extension WindowStyle {
+    /// SwiftUI gives the sidebar and title bar a system vibrancy layer that cannot be turned off from SwiftUI on macOS. In dark
+    /// it shows as a grey slab beside the black page, so mask those layers and let the window background (black) through.
+    @MainActor static func flatten(_ w: NSWindow) {
+        guard w.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua, let root = w.contentView?.superview else { return }
+        func walk(_ v: NSView) {
+            if let fx = v as? NSVisualEffectView { fx.maskImage = NSImage(size: NSSize(width: 1, height: 1)) }   // masks the material only, not the content on top
+            v.subviews.forEach(walk)
+        }
+        walk(root)
+    }
+    /// The views appear a moment after the window; flatten again as the layout settles.
+    @MainActor static func flattenLater(_ w: NSWindow) {
+        for delay in [0.2, 0.6, 1.5] { DispatchQueue.main.asyncAfter(deadline: .now() + delay) { flatten(w) } }
+    }
+}
+
 /// Adaptive colours. Dark follows the Zyvor product look: true black, translucent glass cards, a faint blue bloom.
 enum Theme {
     private static func dynamic(dark: NSColor, light: NSColor) -> Color {
