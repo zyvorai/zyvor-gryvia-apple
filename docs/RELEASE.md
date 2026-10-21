@@ -10,6 +10,11 @@ https://github.com/zyvorai/zyvor-gryvia-apple/releases/tag/v0.4.0. Folds in the 
 - **How the assets got there:** the release workflow created the release and tarballs; its Mac job had no signing secrets, so the DMG, pkg and zip (and their checksums) were replaced with the locally built, notarized ones using `gh release upload --clobber`.
 - **Homebrew:** `Casks/gryvia.rb` is in `zyvorai/homebrew-tap` (0.4.0, checksum equal to the `.sha256` file and GitHub's asset digest, `brew style` clean). `brew audit --cask --online --strict zyvorai/tap/gryvia` passes with no offenses, and `brew install --cask zyvorai/tap/gryvia` installed `Gryvia.app` 0.4.0 on the MacBook (macOS 27.2); `spctl` reports "Notarized Developer ID". The installed app has no stapled ticket of its own (only the DMG does), so Gatekeeper checks Apple's records online on first launch.
 
+## Unreleased: Mac app and site UX pass (PRs #35 to #38)
+
+- **Verified (MacBook, macOS 27.2):** `swift test` (26 tests), release build, the Playwright dashboard test, `scripts/site-check.mjs` and the Python suite (after #35); renders of every pane in light and dark from `GryviaDesktop --snapshot`, viewed one by one.
+- **Not verified:** the real window on screen (screen capture was unavailable in the build session), keyboard shortcuts and the command palette in the live app, the Welcome sheet on a fresh profile, behaviour of the masked sidebar material on other macOS versions, and a signed build of any of this. The site's Mac screenshots are renders against a simulated fleet, not a real one.
+
 ## v0.3.0 (never published; folded into v0.4.0)
 
 Packaging is implemented and exercised locally; nothing has been published yet.

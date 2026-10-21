@@ -226,3 +226,13 @@ section.doc pre code { background: none; padding: 0; color: inherit; }
 .closing { text-align: center; background: linear-gradient(180deg, var(--bg), var(--bg-2)); }
 .closing h2 { margin-left: auto; margin-right: auto; max-width: 18ch; }
 @media (prefers-reduced-motion: reduce) { .js .term:not(.play) .ln, .js .term.play .ln { opacity: 1; transform: none; transition: none; } .term-body .ln:last-child::after { animation: none; } }
+
+/* Mac app screenshots */
+.macshots { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 28px; margin-top: 30px; }
+.macshot { margin: 0; } .macshot .window { margin: 0; max-width: none; }
+.macshot img { height: auto; display: block; }
+.macshot:first-child { grid-column: 1 / -1; }
+.macshot figcaption { margin-top: 10px; color: var(--muted); font-size: 14px; }
+.macshot .dark { display: none; }
+:root[data-theme="dark"] .macshot .light { display: none; } :root[data-theme="dark"] .macshot .dark { display: block; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .macshot .light { display: none; } :root:not([data-theme="light"]) .macshot .dark { display: block; } }

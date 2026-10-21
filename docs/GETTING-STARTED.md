@@ -70,6 +70,10 @@ Deployments hold their reservation until stopped. To stop ones nobody uses:
 
 Idle is measured from gateway requests only; direct calls to a worker's port are not seen. An evicted model returns to `ready`, requests get 503 until you deploy it again, and nothing redeploys it for you.
 
+## Using the Mac app
+
+Open **Gryvia.app** (or `brew install --cask zyvorai/tap/gryvia`). The first launch shows a short Welcome; reopen it from **Help**. Paste an admin token once; it goes to your login Keychain. **⌘K** opens a command palette (jump to a pane, run the demo job, submit), **⌘1…⌘0** switch panes, and clicking an underlined term such as *reserved* explains it. Open a queued job to see why it is waiting. Reservations are bookkeeping, not a GPU meter.
+
 ## 6. Let tenants and assistants in safely
 
 - Tenants use `GRYVIA_TENANT_TOKEN`; quotas and GiB-hour budgets are per tenant.
