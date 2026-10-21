@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.4.1 — 2026-10-21
+
 - **Mac app**: a darker, glassier dark theme (black page, blue bloom, glass cards, one surface for sidebar, toolbar and page); hero headers with a ring gauge and utilisation trend on Live, Overview, Fleet, Model hub and Workloads; card layouts for every list pane; About window and a one-time Welcome sheet with an animated queue → admission → Macs illustration; teaching empty states; a job timeline with a plain-language "why it is waiting"; glossary popovers; a command palette (⌘K) and ⌘1…⌘0 pane shortcuts. `GryviaDesktop --snapshot DIR` renders every pane for design review (see `docs/TESTING.md`).
 - **Web dashboard**: the same dark look; a Fleet total row on the capacity card; more room above the demo banner.
 - **Site**: a Mac app section with screenshots rendered by the app's own snapshot mode against a simulated fleet.
