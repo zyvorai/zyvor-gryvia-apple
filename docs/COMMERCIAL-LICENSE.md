@@ -1,23 +1,34 @@
 # Gryvia Apple Business-Use License (draft for review by Zyvor AI Labs Private Limited and its counsel)
 
-Gryvia Apple is source-available under the Business Source License 1.1 (`LICENSE`, unchanged). Personal,
-non-business use is free. This page describes the one-time paid grant that covers **business and commercial use**.
+Gryvia Apple is source-available under the Business Source License 1.1 (`LICENSE`, unchanged: see the open question below about its personal-use grant). This page describes the paid
+grants: a **Personal** plan for one individual and **business and commercial** plans.
 
-## Free use
+## Personal plan
 
-Anyone may use Gryvia Apple for personal, non-business purposes without paying: build it from source, use the free
-build from GitHub Releases, or run the agent and control plane. "Personal" means by an individual, for no business,
-employer or income-producing purpose.
+Personal means one individual, for no business, employer or income-producing purpose. It is a one-time payment of
+₹420 including GST (about US$4.99), covers that individual's own Macs, and is the lowest-priced plan. It does not
+cover business use; use a plan below for that.
 
-## The paid grant
+## The business grant
 
-On receipt of payment for the signed Gryvia Apple build (₹420 including GST, about US$4.99), Zyvor AI Labs Private
+On receipt of payment for a business plan below, Zyvor AI Labs Private
 Limited ("Licensor") grants the payer ("Licensee", an individual or a single legal entity) a perpetual, worldwide,
 non-exclusive, non-transferable licence to:
 
 1. use Gryvia Apple in business and for commercial purposes, on machines the Licensee owns or operates;
-2. do so for the version bought and every later version released under the BUSL by Licensor;
+2. do so for the version bought and every later version released under the BUSL by Licensor during the paid year;
 3. modify the source for the Licensee's own use.
+
+## Plans (all prices include GST)
+
+| Plan | Price | Covers |
+|---|---|---|
+| Personal | ₹420 one-time (about US$4.99) | One individual, no business use |
+| Solo / small team | ₹4,999 per year (about US$59) | One legal entity, up to 5 Macs |
+| Team | ₹19,999 per year (about US$239) | One legal entity, up to 25 Macs |
+| Larger fleets | by quote | More than 25 Macs or several entities: sales@zyvor.dev |
+
+Payment is by invoice. *[Licensor and counsel to confirm: the grant text above says "perpetual" and these plans are annual, so decide whether the grant is perpetual for the versions released while paid, or lapses.]*
 
 ## What it does not cover
 
@@ -37,6 +48,8 @@ non-exclusive, non-transferable licence to:
 
 ## Open questions for counsel
 
-- Whether ₹420 is intended to cover large organisations or should be capped by entity size.
+- The `LICENSE` file's Additional Use Grant still lets anyone use the Licensed Work for personal, non-business use for free, and v0.4.0 and earlier were published under it. Making personal use paid needs a change to that grant for future versions; it cannot be taken back for versions already published. Counsel to decide.
+- Whether the ₹420 one-time grant sold earlier stays perpetual for those payers, and how the annual plans relate to it.
+- Whether the Mac-count limits (5 and 25) are the right lines, and how "a Mac" is counted for machines that are rebuilt or shared.
 - The exact line between personal and business use for freelancers and employees using Gryvia Apple at work.
 - Transferability on a company sale, and what happens to prior payers if terms change.
