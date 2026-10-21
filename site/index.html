@@ -400,9 +400,9 @@ make run-server
 make run-agent
 <span class="c"># then open http://127.0.0.1:8443 and press “Run demo job”</span></pre></div></div>
       <div class="tier reveal"><div><h3 style="margin:0 0 6px">Install the app and enrol a fleet</h3>
-        <p class="note" style="font-size:16px;margin:0 0 10px">Download the DMG or pkg from the releases page, or use Homebrew once the tap is published. Then <code>make deploy MINI=your-mac</code> installs the agent and control plane on another Mac over ssh.</p>
+        <p class="note" style="font-size:16px;margin:0 0 10px">Download the DMG or pkg from the releases page, or install with Homebrew. Then <code>make deploy MINI=your-mac</code> installs the agent and control plane on another Mac over ssh.</p>
         <div class="cta" style="justify-content:flex-start"><a class="btn primary" href="https://github.com/zyvorai/zyvor-gryvia-apple/releases/latest">Releases</a><a class="btn ghost" href="https://github.com/zyvorai/zyvor-gryvia-apple">Source on GitHub</a></div>
-        <pre data-copy="brew install --cask zyvorai/tap/gryvia" style="margin-top:14px"><span class="c"># when the tap is published</span>
+        <pre data-copy="brew install --cask zyvorai/tap/gryvia" style="margin-top:14px"><span class="c"># Developer ID signed and notarized DMG, Apple silicon, macOS 15+</span>
 brew install --cask zyvorai/tap/gryvia
 shasum -a 256 -c Gryvia-0.4.0.dmg.sha256</pre>
         <div class="callout" style="margin-top:12px">The <strong>v0.4.0 DMG is Developer ID signed and notarized</strong>; the pkg and zip are not, and CI-built artifacts are ad hoc signed unless the release notes say otherwise. For those, use Control-click → Open, or System Settings → Privacy &amp; Security → Open Anyway, and always verify the checksum.</div></div></div>

@@ -37,6 +37,7 @@ make run-server            <span class="c"># terminal 1: creates ./local with to
 make run-agent             <span class="c"># terminal 2: this Mac becomes a worker</span>
 make doctor                <span class="c"># checks the server, your token and that an agent registered</span>
 open http://127.0.0.1:8443 <span class="c"># paste GRYVIA_ADMIN_TOKEN from local/credentials.env</span></pre>
+<p>Prefer an installed app? <code>brew install --cask zyvorai/tap/gryvia</code> installs the notarized <code>Gryvia.app</code> (Apple silicon, macOS 15+). This guide uses a source checkout, so the <code>make</code> and <code>scripts/gryvia.py</code> commands need the repository.</p>
 <p>Press <strong>Run demo job</strong> in the dashboard to see admission, a lease and a result. <code>python3 scripts/gryvia.py quickstart</code> always tells you the next step.</p>
 <p>Load the tokens into your shell for the CLI and curl:</p>
 <pre data-copy="set -a; . local/credentials.env; set +a   # GRYVIA_ADMIN_TOKEN, GRYVIA_TENANT_TOKEN, GRYVIA_AGENT_TOKEN
