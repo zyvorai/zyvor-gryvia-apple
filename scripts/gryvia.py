@@ -267,7 +267,7 @@ def build_parser():
     s.add_argument("--iters", type=int, default=100); s.add_argument("--memory-gib", type=float, default=6); s.add_argument("--name", default="sweep")
     s = sub.add_parser("sweep-status", help="rank the runs of a sweep by validation loss"); s.add_argument("id", nargs="?", help="sweep id (default: newest)")
     s = sub.add_parser("sweep-cancel", help="cancel every unfinished run of a sweep"); s.add_argument("id")
-    s = sub.add_parser("deploy", help="serve a ready model on its producing Mac or a staged copy"); s.add_argument("model"); s.add_argument("--node")
+    s = sub.add_parser("deploy", help="serve a ready model on its producing Mac or a staged copy; repeat --node for one replica per Mac"); s.add_argument("model"); s.add_argument("--node", action="append", help="Mac to serve on (repeatable, at most 8; each needs the artifact, see `stage`)")
     s = sub.add_parser("undeploy", help="stop a deployment"); s.add_argument("model")
     s = sub.add_parser("provenance", help="show the signed provenance chain of a model"); s.add_argument("model")
     s = sub.add_parser("rekey", help="forget a Mac's pinned signing key (after reinstalling the agent)"); s.add_argument("node")
@@ -438,19 +438,22 @@ def run(args) -> int:
         if not m:
             raise CliError("unknown model")
         if args.op == "undeploy":
-            if not m.get("deployJob"):
+            jobs = [r["job"] for r in m.get("replicas", [])] or ([m["deployJob"]] if m.get("deployJob") else [])
+            if not jobs:
                 raise CliError("model is not deployed")
-            emit(c.call("cancel", {"id": m["deployJob"]}), args)
+            emit([c.call("cancel", {"id": j}) for j in jobs] if len(jobs) > 1 else c.call("cancel", {"id": jobs[0]}), args)
             return 0
         if not m.get("path"):
             raise CliError("model has no downloaded file yet")
         if m.get("endpoints"):
             raise CliError(f"already deployed at {m['endpoints'][-1]}; `gryvia.py undeploy {m['id']}` first")
+        nodes = list(dict.fromkeys(args.node or [])) or ([m["node"]] if m.get("node") else [None])
+        if len(nodes) > 8:
+            raise CliError("at most 8 replicas")
         spec = {"runtime": "serve", "kind": "serve", "modelId": m["id"], "model": f"serve {m['id']}", "memoryGiB": max(1.0, m["memoryGiB"]), "priority": 70,
                 "mode": "shared", "retries": 0, "timeoutSeconds": 604800, "args": ["--model", "{{model.path}}"] + (["--engine", "mlx"] if m.get("runtime") == "mlx" else []), "labels": ["serve"]}
-        if args.node or m.get("node"):
-            spec["node"] = args.node or m["node"]
-        emit(c.call("jobs", spec), args, lambda j: f'deploying: job {j["id"][:10]}; endpoint appears in `gryvia.py models`')
+        jobs = [c.call("jobs", dict(spec, node=n) if n else dict(spec)) for n in nodes]
+        emit(jobs if len(jobs) > 1 else jobs[0], args, lambda j: "\n".join(f'deploying: job {x["id"][:10]}; endpoint appears in `gryvia.py models`' for x in (j if isinstance(j, list) else [j])))
         return 0
     if args.op == "provenance":
         m = next((m for m in c.call("state")["models"] if m["id"] == args.model), None)

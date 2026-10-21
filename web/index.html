@@ -160,6 +160,11 @@ gryvia.py drain MAC_ID               # stop new work on a Mac</pre>
       <section class="panel"><h3>Fleet capacity</h3><div id="capacity"></div></section>
       <section class="panel"><h3>Queue health</h3><div id="queue-health"></div><p class="muted">Reservations are admission bookkeeping. macOS controls hardware GPU scheduling.</p></section>
     </div>
+    <section id="idle-panel" class="panel"><h3>Idle deployments <small id="idle-note"></small></h3>
+      <div class="toolbar"><label>Idle for more than <select id="idle-window" aria-label="Idle window"><option value="900">15 minutes</option><option value="3600" selected>1 hour</option><option value="21600">6 hours</option><option value="86400">1 day</option></select></label>
+        <button id="evict-idle-btn" disabled>Evict idle</button></div>
+      <div id="idle-list"></div>
+      <p class="muted">Eviction stops the model server and frees its reservation; the model stays ready and can be deployed again. Reserved figures are admission bookkeeping, not measured GPU utilisation.</p></section>
     <section class="panel"><h3>Trend <small id="trend-note"></small></h3><div id="trend" class="trend"></div></section>
     <section class="panel"><h3>Recent workloads</h3><div id="recent"></div></section>
   </section>
