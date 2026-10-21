@@ -76,4 +76,12 @@
     var so = new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) links.forEach(function (a) { a.setAttribute('aria-current', String(a.getAttribute('href') === '#' + e.target.id)); }); }); }, { rootMargin: '-45% 0px -50% 0px' });
     sections.forEach(function (s) { so.observe(s); });
   }
+
+  // terminal demo: lines appear one after another when it scrolls into view
+  var term = document.getElementById('term');
+  if (term) {
+    term.querySelectorAll('.ln').forEach(function (l, i) { l.style.setProperty('--i', i); });
+    var tio = 'IntersectionObserver' in window ? new IntersectionObserver(function (es) { if (es[0].isIntersecting) { term.classList.add('play'); tio.disconnect(); } }, { threshold: 0.35 }) : null;
+    if (tio) tio.observe(term); else term.classList.add('play');
+  }
 })();
