@@ -1,6 +1,6 @@
 # Gryvia Apple Business-Use License (draft for review by Zyvor AI Labs Private Limited and its counsel)
 
-Gryvia Apple is source-available under the Business Source License 1.1 (`LICENSE`, unchanged: see the open question below about its personal-use grant). This page describes the paid
+Gryvia Apple is source-available under the Business Source License 1.1 (`LICENSE`: its Additional Use Grant no longer allows free personal use for versions after v0.4.0). This page describes the paid
 grants: a **Personal** plan for one individual and **business and commercial** plans.
 
 ## Personal plan
@@ -48,7 +48,7 @@ Payment is by invoice. *[Licensor and counsel to confirm: the grant text above s
 
 ## Open questions for counsel
 
-- The `LICENSE` file's Additional Use Grant still lets anyone use the Licensed Work for personal, non-business use for free, and v0.4.0 and earlier were published under it. Making personal use paid needs a change to that grant for future versions; it cannot be taken back for versions already published. Counsel to decide.
+- `LICENSE` now has no free personal-use grant for versions after v0.4.0, while v0.4.0 and earlier keep the grant they were published under (it cannot be withdrawn). Counsel to confirm the wording, in particular that BUSL 1.1 still lets anyone copy, modify and make **non-production** use of the source without paying, and how "production" is told apart from personal evaluation.
 - Whether the ₹420 one-time grant sold earlier stays perpetual for those payers, and how the annual plans relate to it.
 - Whether the Mac-count limits (5 and 25) are the right lines, and how "a Mac" is counted for machines that are rebuilt or shared.
 - The exact line between personal and business use for freelancers and employees using Gryvia Apple at work.
