@@ -53,7 +53,7 @@
    ```
 3. **Enrol another Mac.** `make deploy MINI=your-mac` syncs, builds, tests and installs launchd services over ssh. `python3 scripts/gryvia.py quickstart` tells you what to do next.
 
-Install the app instead: download the DMG or pkg from the [releases](https://github.com/zyvorai/zyvor-gryvia-apple/releases). Builds are **ad hoc signed and not notarized** unless the release notes say otherwise; verify `shasum -a 256 -c`, then Control-click → Open.
+Install the app instead: download the DMG or pkg from the [releases](https://github.com/zyvorai/zyvor-gryvia-apple/releases). The **v0.4.0 DMG is Developer ID signed and notarized** (Apple's notary service accepted it and the ticket is stapled); the pkg and zip are not signed or notarized, and builds made by CI without signing secrets are ad hoc signed. Verify with `shasum -a 256 -c`; for an ad hoc or unsigned build, Control-click → Open.
 
 **Signed and notarized build (business use): ₹420 including GST, about US$4.99.** Gryvia Apple is free for personal, non-business use. If you use it in a business, buy the [Developer ID signed, notarized build](https://rzp.io/rzp/7A92MBZr): it opens without a Gatekeeper warning and includes a licence for business and commercial use (no redistribution or resale). A GST invoice and a download link arrive by email. Terms: [docs/COMMERCIAL-LICENSE.md](docs/COMMERCIAL-LICENSE.md) (draft). Companies and multi-site licences: sales@zyvor.dev.
 

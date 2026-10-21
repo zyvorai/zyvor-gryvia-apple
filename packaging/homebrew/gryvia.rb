@@ -3,10 +3,10 @@
 # Homebrew cask template. Publish it in a tap (zyvorai/homebrew-tap) after the release assets exist:
 #   1. replace `version` and `sha256` from release/Gryvia-VERSION.dmg.sha256
 #   2. `brew install --cask zyvorai/tap/gryvia`
-# The DMG is ad hoc signed unless the release was built with Developer ID secrets; see docs/RELEASE.md.
+# The v0.4.0 DMG is Developer ID signed and notarized; other builds may be ad hoc signed, see docs/RELEASE.md.
 cask "gryvia" do
-  version "0.3.0"
-  sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+  version "0.4.0"
+  sha256 "4662fab8b2dab6e65bf0ec974721106fc6b732b65d193c77ec0701e5b5bc6687"
 
   url "https://github.com/zyvorai/zyvor-gryvia-apple/releases/download/v#{version}/Gryvia-#{version}.dmg"
   name "Gryvia"
