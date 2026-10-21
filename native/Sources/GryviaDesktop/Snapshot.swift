@@ -25,7 +25,7 @@ enum DesignSnapshot {
         await fleet.refresh()
         for (scheme, name) in [(NSAppearance.Name.aqua, "light"), (NSAppearance.Name.darkAqua, "dark")] {
             for pane in Pane.allCases {
-                let host = NSHostingView(rootView: ContentView(fleet: fleet, start: pane))
+                let host = NSHostingView(rootView: ContentView(fleet: fleet, start: pane, offersWelcome: false))
                 let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 820), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
                 window.appearance = NSAppearance(named: scheme)
                 window.contentView = host
@@ -35,6 +35,20 @@ enum DesignSnapshot {
                 view.cacheDisplay(in: view.bounds, to: rep)
                 let file = o.dir.appendingPathComponent("native-\(pane.rawValue.lowercased().replacingOccurrences(of: " ", with: "-"))-\(name).png")
                 if let png = rep.representation(using: .png, properties: [:]) { try? png.write(to: file); print("wrote", file.path); fflush(stdout) }
+                window.orderOut(nil)
+            }
+        }
+        for (scheme, name) in [(NSAppearance.Name.aqua, "light"), (NSAppearance.Name.darkAqua, "dark")] {
+            for (label, view) in [("welcome", AnyView(WelcomeView(onDone: {}, onConnect: {}))), ("about", AnyView(AboutView()))] {
+                let host = NSHostingView(rootView: view)
+                let window = NSWindow(contentRect: NSRect(origin: .zero, size: host.fittingSize), styleMask: [.titled], backing: .buffered, defer: false)
+                window.appearance = NSAppearance(named: scheme); window.contentView = host; window.makeKeyAndOrderFront(nil)
+                try? await Task.sleep(for: .seconds(0.8))
+                if let v = window.contentView?.superview ?? window.contentView, let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) {
+                    v.cacheDisplay(in: v.bounds, to: rep)
+                    let file = o.dir.appendingPathComponent("native-\(label)-\(name).png")
+                    if let png = rep.representation(using: .png, properties: [:]) { try? png.write(to: file); print("wrote", file.path); fflush(stdout) }
+                }
                 window.orderOut(nil)
             }
         }
