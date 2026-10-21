@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Licence**: the Additional Use Grant no longer permits free personal use for versions after v0.4.0; a paid Personal plan (₹420 one-time) is the lowest tier. v0.4.0 and earlier keep the grant they were published under. See `docs/COMMERCIAL-LICENSE.md` (draft, pending counsel review).
+
 ## v0.4.0 — 2026-10-21
 
 - **Auto idle eviction (opt-in)**: `autoEvictIdleSeconds` / `--auto-evict-idle` runs the existing transactional idle eviction in the background (off by default, minimum 60 s). Dashboard **Idle deployments** panel on Overview shows capacity and what a window would evict, with a two-click Evict.
