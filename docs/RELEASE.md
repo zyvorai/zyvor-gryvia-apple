@@ -1,6 +1,13 @@
 # Release status and how to cut a release
 
-## v0.3.0 (in preparation)
+## v0.4.0 (in preparation)
+
+Folds in the never-published v0.3.0 work plus opt-in auto idle eviction, multi-replica serving and the Idle deployments panel (PR #23).
+
+- **Verified (MacBook, macOS 27.2, Python 3.14):** 223 Python tests; `make verify` including XCTest and the release build, run before the final rebase onto main (the rebase conflict was in `server/inference.py` only, Python tests re-run after it).
+- **Not verified:** replicas across two physical Macs; relay-mode replicas beyond the existing single-replica relay tests; the Playwright browser test (not installed on this Mac); GitHub CI for PR #23; the notarized v0.4.0 build (see the release notes once published).
+
+## v0.3.0 (never published; folded into v0.4.0)
 
 Packaging is implemented and exercised locally; nothing has been published yet.
 
