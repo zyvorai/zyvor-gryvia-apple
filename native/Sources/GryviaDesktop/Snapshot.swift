@@ -28,9 +28,11 @@ enum DesignSnapshot {
                 let host = NSHostingView(rootView: ContentView(fleet: fleet, start: pane, offersWelcome: false))
                 let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 820), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
                 window.appearance = NSAppearance(named: scheme)
+                WindowStyle.apply(window)
                 window.contentView = host
                 window.makeKeyAndOrderFront(nil)
-                try? await Task.sleep(for: .seconds(1.2))
+                try? await Task.sleep(for: .seconds(0.7)); WindowStyle.flatten(window)
+                try? await Task.sleep(for: .seconds(0.7)); WindowStyle.flatten(window)
                 guard let view = window.contentView?.superview ?? window.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { print("no bitmap for \(pane.rawValue)"); continue }
                 view.cacheDisplay(in: view.bounds, to: rep)
                 let file = o.dir.appendingPathComponent("native-\(pane.rawValue.lowercased().replacingOccurrences(of: " ", with: "-"))-\(name).png")
