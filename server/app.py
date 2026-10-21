@@ -11,6 +11,34 @@ from server.relay import AgentRelay
 
 IDLE_MAX_SECONDS=30*86400   # idle-eviction window bound; also rejects NaN/inf
 
+AUTO_EVICT_MIN_SECONDS=60
+
+def auto_evict_settings(config,flag=0):
+    """(idle window, poll interval) in seconds; window 0 means off. Raises ValueError on bad values."""
+    def num(v,name):
+        if type(v) not in (int,float) or v!=v or v<0 or v>IDLE_MAX_SECONDS: raise ValueError(name+' must be a number from 0 to 30 days')
+        return v
+    window=num(flag or config.get('autoEvictIdleSeconds',0),'autoEvictIdleSeconds')
+    interval=num(config.get('autoEvictIntervalSeconds',60),'autoEvictIntervalSeconds')
+    if window and window<AUTO_EVICT_MIN_SECONDS: raise ValueError('autoEvictIdleSeconds must be 0 (off) or at least %d'%AUTO_EVICT_MIN_SECONDS)
+    if interval<1: raise ValueError('autoEvictIntervalSeconds must be at least 1')
+    return window,interval
+
+def auto_evict_once(store,seconds):
+    """One sweep: cancel serve jobs of models idle longer than seconds. Returns cancelled job ids."""
+    return store.evict_idle(seconds,'auto idle eviction')
+
+def start_auto_evict(server,seconds,interval):
+    """Daemon loop that stops with the server. Off (returns None) when seconds is 0."""
+    if not seconds: return None
+    def loop():
+        while not server.stopping.wait(interval):
+            try:
+                n=len(auto_evict_once(server.store,seconds))
+                if n: print('auto idle eviction cancelled %d serve job(s)'%n,flush=True)
+            except Exception: print('auto idle eviction failed',flush=True)
+    t=threading.Thread(target=loop,name='auto-evict',daemon=True); t.start(); return t
+
 class ControlPlaneServer(ThreadingHTTPServer):
     def __init__(self,*args,**kwargs):
         self.stopping=threading.Event()
@@ -229,7 +257,7 @@ def make_server(store,tokens,host='127.0.0.1',port=8443):
     server.web=Path(__file__).resolve().parents[1]/'web'; server.relay=AgentRelay(store); server.gateway=Gateway(relay=server.relay); return server
 
 def main():
-    p=argparse.ArgumentParser(); p.add_argument('--config',default='config.json'); p.add_argument('--db',default='gryvia.db'); p.add_argument('--host',default='127.0.0.1'); p.add_argument('--port',type=int,default=8443); p.add_argument('--cert'); p.add_argument('--require-verified',action='store_true',help='refuse serve/benchmark/evaluate/quantize/fuse on models without verified provenance'); p.add_argument('--inference-loopback',action='store_true',help='allow model replicas registered on 127.0.0.1 (serve jobs on the control-plane Mac)'); p.add_argument('--key'); a=p.parse_args()
+    p=argparse.ArgumentParser(); p.add_argument('--config',default='config.json'); p.add_argument('--db',default='gryvia.db'); p.add_argument('--host',default='127.0.0.1'); p.add_argument('--port',type=int,default=8443); p.add_argument('--cert'); p.add_argument('--require-verified',action='store_true',help='refuse serve/benchmark/evaluate/quantize/fuse on models without verified provenance'); p.add_argument('--inference-loopback',action='store_true',help='allow model replicas registered on 127.0.0.1 (serve jobs on the control-plane Mac)'); p.add_argument('--auto-evict-idle',type=float,default=0,metavar='SECONDS',help='cancel serve jobs of models idle longer than SECONDS (0 = off, minimum 60)'); p.add_argument('--key'); a=p.parse_args()
     config=json.loads(Path(a.config).read_text()); tokens=config['tokens']
     if not tokens or any(len(t)<24 for t in tokens): p.error('tokens must have at least 24 characters')
     for actor in tokens.values():
@@ -241,9 +269,12 @@ def main():
     server.store.require_verified=a.require_verified or bool(config.get('requireVerified',False))
     server.store.require_verified_chain=bool(config.get('requireVerifiedChain',False))
     server.gateway=Gateway(config.get("inferenceOrigins",[]),config.get("inferenceConcurrencyPerTenant",2),relay=server.relay,allow_loopback=a.inference_loopback or bool(config.get("inferenceAllowLoopback",False)))
+    try: evict_window,evict_interval=auto_evict_settings(config,a.auto_evict_idle)
+    except ValueError as e: p.error(str(e))
     if a.cert:
         ctx=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); ctx.minimum_version=ssl.TLSVersion.TLSv1_2; ctx.load_cert_chain(a.cert,a.key); server.socket=ctx.wrap_socket(server.socket,server_side=True)
     print('Gryvia Apple listening on',a.host,a.port,flush=True)
+    start_auto_evict(server,evict_window,evict_interval)
     try: server.serve_forever()
     except KeyboardInterrupt: pass
     finally: server.server_close()

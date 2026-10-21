@@ -31,8 +31,14 @@ class AgentRelay:
             if spec.get('kind')!='serve': raise Problem('not a serve job',409)
             model=self.store.db.execute('SELECT body FROM models WHERE id=?',(spec.get('modelId'),)).fetchone()
             obj=json.loads(model['body']) if model else {}
-            if obj.get('deployJob')!=job or not obj.get('agentRelay'): raise Problem('replica not ready',503)
-            endpoints=obj.get('endpoints',[])
+            reps=obj.get('replicas')
+            if reps:   # per-replica record: this job's own endpoint
+                mine=next((r for r in reps if r.get('job')==job and r.get('node')==node and r.get('agentRelay') is True),None)
+                if not mine: raise Problem('replica not ready',503)
+                endpoints=[mine['url']]
+            else:
+                if obj.get('deployJob')!=job or not obj.get('agentRelay'): raise Problem('replica not ready',503)
+                endpoints=obj.get('endpoints',[])
             if len(endpoints)!=1: raise Problem('invalid relay endpoint',503)
             url=endpoints[0]; parsed=urlsplit(url)
             if parsed.scheme!='http' or parsed.hostname!='127.0.0.1' or not parsed.port or parsed.username or parsed.password or parsed.path not in ('','/') or parsed.query or parsed.fragment:

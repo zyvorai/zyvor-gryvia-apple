@@ -107,6 +107,9 @@ function demoApi(path, body) {
   });
   if (path === 'telemetry') return Promise.resolve(JSON.parse(JSON.stringify(d.telemetry)));
   if (path === 'state') return Promise.resolve(JSON.parse(JSON.stringify({jobs: d.jobs, nodes: d.nodes, tenants: d.tenants, models: d.models, events: d.events, usage: d.usage, decisions: d.decisions, sweeps: d.sweeps, datasets: d.datasets, workflows: d.workflows, time: now})));
+  if (path === 'capacity') { const on = d.nodes.filter(n => n.online), budget = on.reduce((a, n) => a + n.budgetGiB, 0), reserved = on.reduce((a, n) => a + reservedOn(n.id, d.jobs), 0); return Promise.resolve({online: on.length, budgetGiB: budget, reservedGiB: +reserved.toFixed(2), freeGiB: +Math.max(0, budget - reserved).toFixed(2), queued: d.jobs.filter(j => j.state === 'queued').length, running: d.jobs.filter(j => j.state === 'running').length, reservedPct: budget ? +(100 * reserved / budget).toFixed(1) : 0}); }
+  if (path.startsWith('models/idle')) { const sec = Number(new URL('http://x/' + path).searchParams.get('seconds')); return Promise.resolve(d.models.filter(m => (m.endpoints || []).length && 5400 > sec).map(m => ({id: m.id, idle: 5400, last: now - 5400, endpoints: m.endpoints, deployJob: m.deployJob || null}))); }
+  if (path === 'models/evict-idle' && body) { const gone = d.models.filter(m => (m.endpoints || []).length && 5400 > body.seconds); gone.forEach(m => { m.endpoints = []; }); return Promise.resolve({cancelled: gone.map(m => 'demo-' + m.id), count: gone.length}); }
   if (path === 'sweeps' && body) {
     const grid = body.grid || {}, lr = grid.lr || [1e-5], layers = grid.layers || [8], batch = grid.batch || [2], runs = [];
     for (const a of lr) for (const b of layers) for (const c of batch) {
@@ -239,6 +242,7 @@ function render() {
   $('#tenant-list').innerHTML = `<table><tr><th>Tenant</th><th>Quota</th><th>Reserved now</th><th>Weight</th><th>Budget used</th></tr>${tenants.map(t => { const used = ((state.usage || []).find(u => u.tenant === t.id)?.reservedGiBSeconds || 0) / 3600; return `<tr><td>${esc(t.id)}</td><td>${t.quota} GiB</td><td>${sum(jobs.filter(j => j.tenant === t.id && ACTIVE.includes(j.state)), j => j.spec.memoryGiB)} GiB</td><td>${t.weight}</td><td>${t.budget ? `${used.toFixed(1)} / ${t.budget} GiB-h` : 'no budget'}</td></tr>`; }).join('')}</table>`;
   $('#usage-list').innerHTML = (state.usage || []).map(u => `<div class="queue-line"><span>${esc(u.tenant)}</span><strong>${u.workerSeconds.toFixed(1)} worker-seconds · ${u.reservedGiBSeconds.toFixed(1)} GiB-seconds${u.kWh ? ` · ≈${(u.kWh * 1000).toFixed(1)} Wh (estimate)` : ''}</strong></div>`).join('') || '<div class="empty">Metered attempts appear after completion or lease expiry.</div>';
   renderModels();
+  if (view === 'overview') renderIdle();
   $('#events').innerHTML = events.length ? `<table><tr><th>Time</th><th>Event</th><th>Subject</th><th>Detail</th></tr>${events.map(e => `<tr><td>${esc(new Date(e.at * 1000).toLocaleString())}</td><td>${esc(e.kind)}</td><td>${esc(e.subject)}</td><td>${esc(e.detail)}</td></tr>`).join('')}</table>` : '<div class="empty">No administrator activity visible.</div>';
   const al = alerts(), badgeEl = $('#alert-count');
   badgeEl.hidden = al.length === 0; badgeEl.textContent = al.length;
@@ -723,10 +727,35 @@ function renderBuild() {
   $('#deploy-list').innerHTML = ready.map(m => {
     const live = (m.endpoints || []).length > 0;
     return `<article class="node-card"><div class="section-head"><h3>${esc(m.id)}</h3>${live ? badge('running').replace('>running<', '>serving<') : badge('offline').replace('>offline<', '>stopped<')}</div>
-      <p>${esc(m.quant || '')} · ~${m.memoryGiB} GiB · ${esc(m.node || 'Mac unknown')}</p>${live ? `<p><code>${esc(m.endpoints[m.endpoints.length - 1])}</code></p>` : ''}
-      <div class="actions">${live ? `<button data-undeploy="${esc(m.deployJob || '')}">Stop</button><button data-view-go="playground">Open Playground</button>` : `<button class="primary" data-deploy="${esc(m.id)}">Deploy</button>`}</div></article>`;
+      <p>${esc(m.quant || '')} · ~${m.memoryGiB} GiB · ${esc(m.node || 'Mac unknown')}</p>${live ? `<p><code>${esc(m.endpoints[m.endpoints.length - 1])}</code>${(m.replicas || []).length > 1 ? ` · ${m.replicas.length} replicas on ${esc([...new Set(m.replicas.map(r => r.node))].join(', '))}` : ''}</p>` : ''}
+      <div class="actions">${live ? `<button data-undeploy="${esc((m.replicas || []).map(r => r.job).join(',') || m.deployJob || '')}">${(m.replicas || []).length > 1 ? 'Stop all' : 'Stop'}</button><button data-view-go="playground">Open Playground</button>` : `<button class="primary" data-deploy="${esc(m.id)}">Deploy</button>`}</div></article>`;
   }).join('') || emptyArt('model', 'No downloaded models yet', 'Onboard a GGUF model in the Model hub.');
 }
+/* ---------- idle deployments and capacity (operator-triggered eviction) ---------- */
+let idleBusy = false;
+async function renderIdle() {
+  if (idleBusy || !state) return; idleBusy = true;
+  const secs = Number($('#idle-window').value);
+  try {
+    const [cap, idle] = await Promise.all([api('capacity'), api('models/idle?seconds=' + secs)]);
+    $('#idle-note').textContent = `· ${cap.online} online · ${cap.reservedGiB} of ${cap.budgetGiB} GiB reserved (${cap.reservedPct}%)`;
+    $('#idle-list').innerHTML = idle.length ? `<table><tr><th>Model</th><th>Idle</th><th>Served at</th></tr>${idle.map(i => `<tr><td>${esc(i.id)}</td><td class="num">${esc(i.idle >= 3600 ? (i.idle / 3600).toFixed(1) + ' h' : Math.round(i.idle / 60) + ' min')}</td><td><code>${esc((i.endpoints || []).join(', '))}</code></td></tr>`).join('')}</table>` : '<p class="muted">Nothing has been idle that long.</p>';
+    $('#evict-idle-btn').disabled = idle.length === 0;
+  } catch (err) { $('#idle-list').innerHTML = '<p class="muted">Capacity and idle data need an admin token.</p>'; $('#evict-idle-btn').disabled = true; }
+  finally { idleBusy = false; }
+}
+$('#idle-window').onchange = renderIdle;
+let evictArmed = null;
+$('#evict-idle-btn').onclick = async () => {
+  const btn = $('#evict-idle-btn'), secs = Number($('#idle-window').value);
+  if (!evictArmed) {   // two clicks instead of a browser dialog: first arms, second acts
+    btn.textContent = 'Click again to confirm'; evictArmed = setTimeout(() => { evictArmed = null; btn.textContent = 'Evict idle'; }, 5000); return;
+  }
+  clearTimeout(evictArmed); evictArmed = null; btn.textContent = 'Evict idle';
+  try { const r = await api('models/evict-idle', {seconds: secs, reason: 'dashboard'}); await refresh(); toast(r.count ? `Stopped ${r.count} idle server${r.count === 1 ? '' : 's'}` : 'Nothing was idle'); renderIdle(); } catch (err) { fail(err); }
+};
+setInterval(() => { if (view === 'overview' && !paused) renderIdle(); }, 15000);
+
 function drawChart(m) {
   const series = [['trainLoss', 'Train loss', 'var(--accent-color)'], ['valLoss', 'Validation loss', 'var(--status-queued)']].filter(([k]) => (m[k] || []).length);
   if (!series.length) { $('#train-chart').innerHTML = emptyArt('chart', 'No loss reported yet', 'MLX prints the first line after the model loads.'); return; }
@@ -1063,7 +1092,7 @@ document.addEventListener('click', async e => {
     if (d.chart) { select('training'); showChart(d.chart); }
     if (d.wfCancel) { await api('workflows/cancel', {id: d.wfCancel}); await refresh(); toast('Pipeline cancelled'); }
     if (d.viewGo) select(d.viewGo);
-    if (d.undeploy) { await api('cancel', {id: d.undeploy}); await refresh(); toast('Stopping server'); }
+    if (d.undeploy) { for (const id of d.undeploy.split(',').filter(Boolean)) await api('cancel', {id}); await refresh(); toast('Stopping server'); }
     if (d.deploy) {
       const m = state.models.find(x => x.id === d.deploy);
       await api('jobs', {runtime: 'serve', kind: 'serve', modelId: m.id, model: 'serve ' + m.id, memoryGiB: Math.max(1, m.memoryGiB), priority: 70, mode: 'shared', retries: 0, timeoutSeconds: 604800, args: ['--model', m.path, ...(m.runtime === 'mlx' ? ['--engine', 'mlx'] : [])], labels: ['serve'], ...(m.node ? {node: m.node} : {})});

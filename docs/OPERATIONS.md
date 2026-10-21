@@ -45,8 +45,13 @@ curl -fsS -H "Authorization: Bearer $GRYVIA_ADMIN_TOKEN" http://127.0.0.1:8443/a
 
 - **What counts as idle:** a model is idle when no gateway request (completed or streamed) and no deployment for it has been recorded within `seconds` (0 to 30 days). Traffic that bypasses the gateway, such as direct calls to a worker's loopback port, is not seen.
 - **What eviction does:** it cancels the model's serve jobs, the same as `undeploy`. The reservation is released when the agent acknowledges. The model returns to `ready`, and later requests get 503 until it is deployed again. The next request does not redeploy it automatically.
-- **No automatic schedule:** nothing evicts by itself. To sweep on a schedule, run the POST from cron or launchd.
+- **Automatic eviction (opt-in, off by default):** set `autoEvictIdleSeconds` in `config.json` (or start the server with `--auto-evict-idle SECONDS`) to 0 for off, or 60 seconds to 30 days. A daemon thread in the control plane then runs the same transactional eviction every `autoEvictIntervalSeconds` (default 60), logs only a count, and records `model.evict_idle` events with the reason `auto idle eviction`. Without the setting nothing evicts by itself. The window is measured from gateway requests only, so choose it well above your longest quiet period.
+- **Dashboard:** Overview → Idle deployments lists what a chosen window would evict and has a two-click Evict button (admin token).
 - **Capacity numbers:** `/api/capacity` reports online nodes, budget/reserved/free GiB and queued/running counts. `reservedPct` is reservations divided by budget, not measured GPU utilisation.
+
+## Replicas
+
+`gryvia.py deploy MODEL --node A --node B` submits one serve job per Mac (up to 8; each Mac needs the artifact, see `stage`). Each job that reports an endpoint becomes a replica on the model record, and the gateway sends each request to the replica with the fewest requests in flight. If a replica is unreachable or answers badly, the gateway tries one other replica before returning 502; streams fail over only before the first byte, never mid-stream. When one replica's job ends the others keep serving. `undeploy` and idle eviction stop every replica. There is no autoscaler and no reconciliation that replaces a lost replica.
 
 ## Hardware acceptance checklist
 

@@ -3,6 +3,8 @@
 const {chromium}=require('playwright');
 (async()=>{const browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:1440,height:1100}});let errors=[];page.on('pageerror',e=>errors.push(e.message));
 await page.goto('http://127.0.0.1:8765');await page.fill('#token','browser-test-admin-token-00000000');await page.click('#login button');await page.waitForSelector('#hero .num');await page.waitForFunction(()=>document.querySelector('#hero .num').textContent==='92');if((await page.locator('#live-summary .heat-cell').count())!==2)throw Error('heat strip missing');if(!(await page.getAttribute('#hero svg.ring','aria-label')).includes('%'))throw Error('ring missing');await page.click('[data-view="overview"]');await page.waitForSelector('#metrics .metric');
+// idle deployments panel: capacity note renders, the window selector refreshes, evict needs two clicks and is disabled with nothing idle
+await page.waitForFunction(()=>document.querySelector('#idle-note').textContent.includes('GiB reserved'));await page.selectOption('#idle-window','900');await page.waitForSelector('#idle-list');if(!(await page.isDisabled('#evict-idle-btn'))&&(await page.locator('#idle-list table').count())===0)throw Error('evict enabled with nothing idle');
 if(await page.locator('#metrics .metric').count()!==4)throw Error('metrics missing');await page.click('[data-view="live"]');
 if(await page.locator('#gpu-cards .gpu-card').count()!==2)throw Error('gpu cards missing');
 if(await page.locator('#gpu-cards .core').count()!==92)throw Error('core grid wrong');

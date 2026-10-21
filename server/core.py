@@ -6,6 +6,7 @@ from server import ed25519
 
 RUNTIMES=['demo','mlx','llama','mps','coreml','download','bench','evaluate','quantize','train','serve','fuse']
 KINDS=['inference','download','benchmark','evaluate','quantize','train','serve','dataset','fuse']
+MAX_REPLICAS=8   # serve replicas tracked per model
 MODEL_STATES=['onboarding','ready','deployed','failed']
 SOURCE_HOSTS=('huggingface.co','hf.co','cdn-lfs.huggingface.co','cdn-lfs-us-1.huggingface.co')
 
@@ -476,8 +477,13 @@ class Store:
                     row=self.db.execute('SELECT body FROM models WHERE id=?',(spec['modelId'],)).fetchone()
                     if row:
                         m=json.loads(row['body'])
-                        m['endpoints']=[obj['url']]; m['status']='deployed'; m['deployJob']=ident; m['endpointNode']=node; m['agentRelay']=obj.get('agentRelay') is True
-                        if m.get('runtime')=='mlx': m['workerModel']='default_model'   # mlx_lm.server serves the model it was started with under this name   # one serve job per model: the newest replaces any stale entry
+                        # One replica per serve job: a repeated endpoint line from the same job replaces its entry,
+                        # a different job adds a replica. The flat fields below mirror the newest replica.
+                        relay=obj.get('agentRelay') is True
+                        reps=[r for r in m.get('replicas',[]) if r.get('job')!=ident][-(MAX_REPLICAS-1):]
+                        reps.append(dict(job=ident,node=node,url=obj['url'],agentRelay=relay))
+                        m['replicas']=reps; m['endpoints']=[r['url'] for r in reps]; m['status']='deployed'; m['deployJob']=ident; m['endpointNode']=node; m['agentRelay']=relay
+                        if m.get('runtime')=='mlx': m['workerModel']='default_model'   # mlx_lm.server serves the model it was started with under this name
                         self.db.execute('UPDATE models SET body=? WHERE id=?',(json.dumps(m),spec['modelId'])); self.event('model.deployed',spec['modelId'],obj['url'])
         self.tx(run)
     def drain(self,node,value):
@@ -605,9 +611,16 @@ class Store:
             child=dict(sha256=result.get('sha256',''),artifactType=result.get('artifactType','directory'),runtime='mlx',memoryGiB=base.get('memoryGiB',4),status='ready',path=result.get('adapterPath',''),parent=model,source=base.get('source',''),quant=base.get('quant',''),
                        kind='lora-adapter',dataset=spec.get('datasetId',''),trainJob=ident,finalValLoss=result.get('finalValLoss'),finalTrainLoss=result.get('finalTrainLoss'),node=node,updated=self.clock(),provenance=self._prov(ident,'train',attestation,model))
             self.db.execute('INSERT OR REPLACE INTO models VALUES(?,?)',(f'{model}-lora-{tag}',json.dumps(child))); self.event('model.adapter',f'{model}-lora-{tag}',ident)
-        if kind=='serve' and row and json.loads(row['body']).get('deployJob') in (None,ident):
-            m=json.loads(row['body']); m.pop('deployJob',None); m.pop('endpointNode',None); m.pop('agentRelay',None); m['endpoints']=[]; m['status']='ready' if m.get('path') else m.get('status','ready')
-            self.db.execute('UPDATE models SET body=? WHERE id=?',(json.dumps(m),model)); self.event('model.undeployed',model,ident)
+        if kind=='serve' and row:
+            m=json.loads(row['body']); reps=m.get('replicas',[]); rest=[r for r in reps if r.get('job')!=ident]
+            if reps and rest and len(rest)<len(reps):   # one replica ended; the others keep serving and the flat fields follow the newest
+                last=rest[-1]; m.update(replicas=rest,endpoints=[r['url'] for r in rest],deployJob=last['job'],endpointNode=last['node'],agentRelay=last['agentRelay'])
+                self.db.execute('UPDATE models SET body=? WHERE id=?',(json.dumps(m),model)); self.event('model.replica_lost',model,ident)
+            elif reps and not rest and m.get('deployJob') not in (None,ident):   # record was repointed at a newer job: leave it
+                m['replicas']=rest; self.db.execute('UPDATE models SET body=? WHERE id=?',(json.dumps(m),model))
+            elif (reps and not rest) or (not reps and m.get('deployJob') in (None,ident)):   # last replica gone, or a legacy single deployment
+                m.pop('replicas',None); m.pop('deployJob',None); m.pop('endpointNode',None); m.pop('agentRelay',None); m['endpoints']=[]; m['status']='ready' if m.get('path') else m.get('status','ready')
+                self.db.execute('UPDATE models SET body=? WHERE id=?',(json.dumps(m),model)); self.event('model.undeployed',model,ident)
         if kind=='fuse' and success and result and row:
             parent=json.loads(row['body'])
             child=dict(sha256=result.get('sha256',''),artifactType=result.get('artifactType','directory'),runtime='mlx',memoryGiB=parent.get('memoryGiB',4),status='ready',path=result.get('path',''),sizeBytes=result.get('bytes',0),parent=model,
@@ -617,7 +630,7 @@ class Store:
         if kind=='quantize' and success and result and row:
             parent=json.loads(row['body']); q=result.get('quant','quant')
             child=dict(parent,status='ready',path=result.get('path',''),sha256=result.get('sha256',''),sizeBytes=result.get('bytes',0),quant=q,parent=model,node=node,updated=self.clock(),provenance=self._prov(ident,'quantize',attestation,model))
-            for field in ('endpoints','deployJob','endpointNode','agentRelay','locations'): child.pop(field,None)
+            for field in ('endpoints','replicas','deployJob','endpointNode','agentRelay','locations'): child.pop(field,None)
             child['memoryGiB']=round(parent['memoryGiB']*self.estimate_memory_gib(1,q)/max(self.estimate_memory_gib(1,parent.get('quant','')),0.1),1) if parent.get('paramsB') is None else self.estimate_memory_gib(parent['paramsB'],q)
             self.db.execute('INSERT OR REPLACE INTO models VALUES(?,?)',(f'{model}-{q}',json.dumps(child))); self.event('model.quantized',f'{model}-{q}',ident)
     def check_attestation(self,node,job,att,success=None):
