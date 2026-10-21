@@ -241,12 +241,12 @@ struct LiveView: View {
     }
     func tile(_ value: String, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(value).font(.system(.title, design: .rounded, weight: .bold)).monospacedDigit()
+            Text(value).font(.system(.title, design: .rounded, weight: .bold)).monospacedDigit().glowText()
             Text(label).font(.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading).padding(14)
-        .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color(nsColor: .separatorColor)))
+        .background(Theme.surface, in: .rect(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.hairline))
     }
 
     func chip(_ job: Job, waiting: Bool) -> some View {
@@ -289,7 +289,7 @@ struct LiveView: View {
                             ForEach(mine) { chip($0, waiting: false) }
                             Spacer(minLength: 0)
                         }.padding(8).frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-                        .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 8))
+                        .background(Theme.surface, in: .rect(cornerRadius: 8))
                     }
                 }.frame(maxWidth: .infinity, alignment: .topLeading).padding(12)
                 .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 12))
@@ -297,8 +297,8 @@ struct LiveView: View {
         }
         .animation(.smooth(duration: 0.6), value: jobs.map { $0.id + $0.state + ($0.node ?? "") })
         .padding(16)
-        .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color(nsColor: .separatorColor)))
+        .background(Theme.surface, in: .rect(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Theme.hairline))
     }
 
     func gpuCard(_ n: Node) -> some View {
@@ -346,8 +346,8 @@ struct LiveView: View {
                 .font(.caption).foregroundStyle(.secondary)
         }
         .padding(16).frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color(nsColor: .separatorColor)))
+        .background(Theme.surface, in: .rect(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Theme.hairline))
     }
 
     var decisions: some View {
@@ -365,8 +365,8 @@ struct LiveView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading).padding(16)
-        .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color(nsColor: .separatorColor)))
+        .background(Theme.surface, in: .rect(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Theme.hairline))
     }
 }
 
@@ -391,7 +391,7 @@ struct ModelHubView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top) {
-                    PaneHeader(title: "Model hub", subtitle: "Bring a model onto your Macs, check it fits, benchmark it, and test it.",
+                    PaneHeader(title: "Model hub", eyebrow: "Build", subtitle: "Bring a model onto your Macs, check it fits, benchmark it, and test it.",
                                trailing: "\(models.filter(\.isReady).count) ready · \(models.filter { !($0.endpoints ?? []).isEmpty }.count) serving")
                     Button("Onboard a model", systemImage: "arrow.down.circle") { showOnboard = true }.buttonStyle(.borderedProminent)
                 }
@@ -411,7 +411,7 @@ struct ModelHubView: View {
                         }
                         if let b = latest(m.id, "benchmark") {
                             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                Text(String(format: "%.0f", b.generationTokensPerSecond ?? 0)).font(.system(size: 32, weight: .bold, design: .rounded)).monospacedDigit()
+                                Text(String(format: "%.0f", b.generationTokensPerSecond ?? 0)).font(.system(size: 32, weight: .bold, design: .rounded)).monospacedDigit().glowText()
                                 Text("tok/s generation").foregroundStyle(.secondary)
                                 Text(String(format: "· %.0f tok/s prompt", b.promptTokensPerSecond ?? 0)).font(.callout).foregroundStyle(.secondary).monospacedDigit()
                             }
@@ -532,7 +532,7 @@ struct TrainingView: View {
                         }
                         .padding(14).frame(maxWidth: .infinity)
                         .background(Color(nsColor: selected == j.id ? .selectedContentBackgroundColor : .controlBackgroundColor).opacity(selected == j.id ? 0.25 : 1), in: .rect(cornerRadius: 14))
-                        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color(nsColor: .separatorColor)))
+                        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.hairline))
                     }.buttonStyle(.plain)
                 }
                 if selected != nil { chart }
@@ -568,8 +568,8 @@ struct TrainingView: View {
             }
         }
         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color(nsColor: .separatorColor)))
+        .background(Theme.surface, in: .rect(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.hairline))
     }
 }
 
@@ -626,7 +626,7 @@ struct DeploymentsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                PaneHeader(title: "Deployments", subtitle: "Models served by llama-server or mlx_lm.server on a Mac. Replicas bind to loopback and are reachable from the control-plane Mac.",
+                PaneHeader(title: "Deployments", eyebrow: "Run", subtitle: "Models served by llama-server or mlx_lm.server on a Mac. Replicas bind to loopback and are reachable from the control-plane Mac.",
                            trailing: "\(models.filter { !($0.endpoints ?? []).isEmpty }.count) serving")
                 if models.isEmpty {
                     ContentUnavailableView("Nothing to deploy yet", systemImage: "arrow.up.forward.app", description: Text("Onboard a GGUF model in the Model hub first."))
@@ -657,8 +657,8 @@ struct DeploymentsView: View {
                         }
                     }
                     .padding(14).frame(maxWidth: .infinity)
-                    .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 14))
-                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color(nsColor: .separatorColor)))
+                    .background(Theme.surface, in: .rect(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.hairline))
                 }
             }.padding(24)
         }
@@ -688,11 +688,11 @@ struct Metric: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Label(label, systemImage: symbol).foregroundStyle(.secondary)
-            Text("\(value)").font(.system(.largeTitle, design: .rounded, weight: .bold)).monospacedDigit().contentTransition(.numericText())
+            Text("\(value)").font(.system(.largeTitle, design: .rounded, weight: .bold)).monospacedDigit().contentTransition(.numericText()).glowText()
         }
         .frame(maxWidth: .infinity, alignment: .leading).padding(16)
-        .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color(nsColor: .separatorColor)))
+        .background(Theme.surface, in: .rect(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.hairline))
     }
 }
 
@@ -704,8 +704,11 @@ struct ContentView: View {
     }()
     @Bindable var fleet: Fleet
     @State private var section: Pane?
-    init(fleet: Fleet, start: Pane? = nil) {
+    @AppStorage("welcomeSeen") private var welcomeSeen = false
+    private var offersWelcome = true
+    init(fleet: Fleet, start: Pane? = nil, offersWelcome: Bool = true) {
         self.fleet = fleet
+        self.offersWelcome = offersWelcome
         _section = State(initialValue: start ?? Pane(rawValue: UserDefaults.standard.string(forKey: "startSection") ?? "") ?? .live)
     }
     @AppStorage("welcomeHidden") private var welcomeHidden = false
@@ -730,9 +733,9 @@ struct ContentView: View {
             }
             .safeAreaInset(edge: .top) {
                 HStack(spacing: 10) {
-                    Image(nsImage: Self.brandIcon).resizable().frame(width: 32, height: 32)
+                    BrandMark(size: 32)
                     Text("Gryvia").font(.title3.bold())
-                    Spacer()
+                    Spacer(minLength: 0)
                 }.padding(.horizontal, 14).padding(.top, 6)
             }
                 .navigationTitle("Gryvia")
@@ -750,9 +753,13 @@ struct ContentView: View {
                 ToolbarItem { Button("Submit", systemImage: "plus") { showSubmit = true }.disabled(fleet.token.isEmpty).help("Submit a workload") }
                 ToolbarItem { Button("Refresh", systemImage: "arrow.clockwise") { Task { await fleet.refresh() } } }
             }
+            .background { AmbientBackground() }
             .searchable(text: $filter, prompt: "Filter jobs, nodes, tenants")
         }
         .frame(minWidth: 960, minHeight: 640)
+        .sheet(isPresented: Binding(get: { offersWelcome && !welcomeSeen }, set: { if !$0 { welcomeSeen = true } })) {
+            WelcomeView(onDone: { welcomeSeen = true }, onConnect: { welcomeSeen = true; section = .guide })
+        }
         .sheet(isPresented: $showSubmit) { SubmitSheet(fleet: fleet) }
         .sheet(item: $selected) { job in JobDetail(fleet: fleet, job: job) }
     }
@@ -848,7 +855,7 @@ struct ContentView: View {
         let online = nodes.filter(\.online).count
         return ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                PaneHeader(title: "Fleet", subtitle: "Each Mac running the Gryvia agent, and when it may take work.", trailing: "\(online) of \(nodes.count) online")
+                PaneHeader(title: "Fleet", eyebrow: "Monitor", subtitle: "Each Mac running the Gryvia agent, and when it may take work.", trailing: "\(online) of \(nodes.count) online")
                 if nodes.isEmpty { ContentUnavailableView("No Macs yet", systemImage: "desktopcomputer", description: Text("Run `make run-agent` on a Mac to enrol it.")) }
                 ForEach(nodes) { n in
                     HStack(spacing: 14) {
@@ -885,7 +892,7 @@ struct ContentView: View {
         }
         return ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                PaneHeader(title: "Workloads", subtitle: "Every job, newest first. Click one to read its logs.", trailing: "\(jobs.count) shown")
+                PaneHeader(title: "Workloads", eyebrow: "Run", subtitle: "Every job, newest first. Click one to read its logs.", trailing: "\(jobs.count) shown")
                 jobRows(jobs).padding(.horizontal, 16).card()
             }.padding(24)
         }
@@ -942,7 +949,7 @@ struct ContentView: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        PaneHeader(title: "Alerts", subtitle: "Things that need a look: offline Macs, thermal limits, failed jobs.", trailing: "\(items.count) open")
+                        PaneHeader(title: "Alerts", eyebrow: "Govern", subtitle: "Things that need a look: offline Macs, thermal limits, failed jobs.", trailing: "\(items.count) open")
                         ForEach(items) { a in
                             let tone: Color = a.level == .error ? .red : .secondary
                             HStack(spacing: 12) {
@@ -963,7 +970,7 @@ struct ContentView: View {
         let list = fleet.state?.tenants ?? []
         return ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                PaneHeader(title: "Tenants", subtitle: "A memory allowance and a fairness weight per team.", trailing: "\(list.count) total")
+                PaneHeader(title: "Tenants", eyebrow: "Govern", subtitle: "A memory allowance and a fairness weight per team.", trailing: "\(list.count) total")
                 ForEach(list) { t in
                     let used = (fleet.state?.jobs ?? []).filter { $0.tenant == t.id && ["running", "cancelling"].contains($0.state) }.reduce(0) { $0 + $1.spec.memoryGiB }
                     VStack(alignment: .leading, spacing: 8) {
@@ -1063,6 +1070,8 @@ struct SettingsView: View {
                 }
         }
         Settings { SettingsView() }
+        Window("About Gryvia", id: "about") { AboutView() }.windowResizability(.contentSize)
+            .commands { IdentityCommands() }
         MenuBarExtra {
             Text("\(fleet.running) running · \(fleet.queued) queued")
             Divider()
