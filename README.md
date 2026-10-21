@@ -51,6 +51,8 @@ Every command is real; the full walkthrough, with what to check when something g
 | You want an AI assistant to check or operate the fleet | **MCP server** (read-only by default) and Shortcuts actions |
 | You want to try it without hardware | **Demo mode**: a clearly labelled simulated fleet in the browser |
 
+The **[site](https://zyvorai.github.io/zyvor-gryvia-apple/#macapp)** shows the native Mac app in light and dark.
+
 ## Who it is for
 
 - **A small AI team with a Mac rack:** several minis and Studios, one queue, quotas so one fine-tune cannot starve the rest, one endpoint for apps.
