@@ -41,7 +41,10 @@ enum DesignSnapshot {
             }
         }
         for (scheme, name) in [(NSAppearance.Name.aqua, "light"), (NSAppearance.Name.darkAqua, "dark")] {
-            for (label, view) in [("welcome", AnyView(WelcomeView(onDone: {}, onConnect: {}))), ("about", AnyView(AboutView()))] {
+            var sheets: [(String, AnyView)] = [("welcome", AnyView(WelcomeView(onDone: {}, onConnect: {}))), ("about", AnyView(AboutView())),
+                                               ("palette", AnyView(PaletteView(commands: Pane.allCases.map { p in PaletteCommand(title: "Go to \(p.rawValue)", symbol: p.symbol) {} }, dismiss: {})))]
+            if let queued = fleet.state?.jobs.first(where: { $0.state == "queued" }) { sheets.append(("job-detail", AnyView(JobDetail(fleet: fleet, job: queued)))) }
+            for (label, view) in sheets {
                 let host = NSHostingView(rootView: view)
                 let window = NSWindow(contentRect: NSRect(origin: .zero, size: host.fittingSize), styleMask: [.titled], backing: .buffered, defer: false)
                 window.appearance = NSAppearance(named: scheme); window.contentView = host; window.makeKeyAndOrderFront(nil)

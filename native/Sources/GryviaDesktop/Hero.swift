@@ -69,9 +69,7 @@ struct HeroHeader: View {
                 Text(sentence).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 if !chips.isEmpty {
                     HStack(spacing: 18) {
-                        ForEach(chips, id: \.1) { c in
-                            HStack(alignment: .firstTextBaseline, spacing: 4) { Text(c.0).font(.callout.weight(.semibold).monospacedDigit()); Text(c.1).font(.callout).foregroundStyle(.secondary) }
-                        }
+                        ForEach(chips, id: \.1) { c in ChipView(value: c.0, label: c.1) }
                     }
                 }
                 if trend.count > 1 { Sparkline(values: trend).frame(maxWidth: 360) }
@@ -80,6 +78,23 @@ struct HeroHeader: View {
             if let ring { RingGauge(fraction: ring.fraction, label: ring.label, caption: ring.caption) }
         }
         .padding(.vertical, 6)
+    }
+}
+
+/// A figure and its label; the label opens a plain-language definition when the Glossary has one.
+struct ChipView: View {
+    let value: String, label: String
+    @State private var open = false
+    var body: some View {
+        let entry = Glossary.entry(for: label)
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(value).font(.callout.weight(.semibold).monospacedDigit())
+            if let entry {
+                Button { open = true } label: { Text(label).font(.callout).foregroundStyle(.secondary).underline(true, pattern: .dot) }
+                    .buttonStyle(.plain).help("What does “\(label)” mean?")
+                    .popover(isPresented: $open) { VStack(alignment: .leading, spacing: 4) { Text(entry.term.capitalized).font(.headline); Text(entry.text).foregroundStyle(.secondary) }.padding(14).frame(width: 260) }
+            } else { Text(label).font(.callout).foregroundStyle(.secondary) }
+        }
     }
 }
 
