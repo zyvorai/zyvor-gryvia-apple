@@ -56,7 +56,7 @@
 Install the app instead: `brew install --cask zyvorai/tap/gryvia`, or download the DMG or pkg from the [releases](https://github.com/zyvorai/zyvor-gryvia-apple/releases). The **v0.4.0 DMG is Developer ID signed and notarized** (Apple's notary service accepted it and the ticket is stapled); the pkg and zip are not signed or notarized, and builds made by CI without signing secrets are ad hoc signed. Verify with `shasum -a 256 -c`; for an ad hoc or unsigned build, Control-click → Open.
 
 
-**Pricing (GST invoice included).** **Personal ₹420 one-time (about US$4.99), for one person and no business use**, bought [here](https://rzp.io/rzp/7A92MBZr). **Solo / small team ₹4,999 per year (about US$59), up to 5 Macs; Team ₹19,999 per year (about US$239), up to 25 Macs;** larger fleets and several entities by quote at sales@zyvor.dev. The same Developer ID signed and notarized build for every plan; no redistribution or resale. Terms: [docs/COMMERCIAL-LICENSE.md](docs/COMMERCIAL-LICENSE.md) (draft).
+**Free to read, build and test; paid to run for real work.** The source is under the Business Source License 1.1 (see [LICENSE](LICENSE), the authority; v0.4.0 and earlier keep their original personal-use grant). **Pricing (GST invoice included).** **Personal ₹420 one-time (about US$4.99), for one person and no business use**, bought [here](https://rzp.io/rzp/7A92MBZr). **Solo / small team ₹4,999 per year (about US$59), up to 5 Macs; Team ₹19,999 per year (about US$239), up to 25 Macs;** larger fleets and several entities by quote at sales@zyvor.dev. The same Developer ID signed and notarized build for every plan; no redistribution or resale. Terms: [docs/COMMERCIAL-LICENSE.md](docs/COMMERCIAL-LICENSE.md) (draft).
 
 ## Honest limits
 
