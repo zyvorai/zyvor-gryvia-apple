@@ -390,28 +390,31 @@ struct ModelHubView: View {
         let models = fleet.state?.models ?? []
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text("Bring a model onto your Macs, check it fits, benchmark it, and test it.").foregroundStyle(.secondary)
-                    Spacer()
+                HStack(alignment: .top) {
+                    PaneHeader(title: "Model hub", subtitle: "Bring a model onto your Macs, check it fits, benchmark it, and test it.",
+                               trailing: "\(models.filter(\.isReady).count) ready · \(models.filter { !($0.endpoints ?? []).isEmpty }.count) serving")
                     Button("Onboard a model", systemImage: "arrow.down.circle") { showOnboard = true }.buttonStyle(.borderedProminent)
                 }
                 if models.isEmpty {
                     ContentUnavailableView("No models yet", systemImage: "cube", description: Text("Press “Onboard a model” to download one onto a Mac."))
                 }
                 ForEach(models) { m in
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 10) {
                         HStack {
                             Text(m.id).font(.headline)
-                            Text((m.status ?? "ready").capitalized).font(.caption.weight(.semibold))
-                                .padding(.horizontal, 8).padding(.vertical, 2)
-                                .background((m.status == "failed" ? Color.red : m.status == "onboarding" ? Color.orange : Color.green).opacity(0.18), in: .capsule)
+                            Chip(text: (m.status ?? "ready").capitalized, color: m.status == "failed" ? .red : m.status == "onboarding" ? .orange : .green)
                             Spacer()
                             Text(String(format: "~%.1f GiB memory", m.memoryGiB)).font(.caption).foregroundStyle(.secondary)
                         }
-                        Text([m.runtime, m.quant, m.paramsB.map { "\($0)B params" }, m.sizeBytes.map { String(format: "%.2f GiB on disk", $0 / 1_073_741_824) }, m.node]
-                            .compactMap { $0 }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
+                        HStack(spacing: 6) {
+                            ForEach([m.runtime, m.quant, m.paramsB.map { "\($0)B params" }, m.sizeBytes.map { String(format: "%.2f GiB on disk", $0 / 1_073_741_824) }, m.node].compactMap { $0 }, id: \.self) { Chip(text: $0) }
+                        }
                         if let b = latest(m.id, "benchmark") {
-                            Text(String(format: "%.1f tok/s generation · %.0f tok/s prompt", b.generationTokensPerSecond ?? 0, b.promptTokensPerSecond ?? 0)).font(.callout.monospacedDigit())
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Text(String(format: "%.0f", b.generationTokensPerSecond ?? 0)).font(.system(size: 32, weight: .bold, design: .rounded)).monospacedDigit()
+                                Text("tok/s generation").foregroundStyle(.secondary)
+                                Text(String(format: "· %.0f tok/s prompt", b.promptTokensPerSecond ?? 0)).font(.callout).foregroundStyle(.secondary).monospacedDigit()
+                            }
                         }
                         if let e = latest(m.id, "evaluate") { Text("Evaluation: \(e.passed ?? 0)/\(e.total ?? 0) passed").font(.callout) }
                         HStack {
@@ -424,9 +427,7 @@ struct ModelHubView: View {
                             Button("Copy path", systemImage: "doc.on.doc") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(m.path ?? "", forType: .string) }.disabled(m.path == nil)
                         }
                     }
-                    .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 14))
-                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color(nsColor: .separatorColor)))
+                    .padding(16).frame(maxWidth: .infinity, alignment: .leading).card()
                 }
                 if let ds = fleet.state?.datasets, !ds.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
@@ -440,9 +441,7 @@ struct ModelHubView: View {
                             }.font(.callout)
                         }
                     }
-                    .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 14))
-                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color(nsColor: .separatorColor)))
+                    .padding(16).frame(maxWidth: .infinity, alignment: .leading).card()
                 }
             }.padding(24)
         }

@@ -308,7 +308,10 @@ header .eyebrow { display: none; }
 .has-hero .view > h2:first-child, .has-hero .view > .section-head:first-child > h2, .has-hero .view > .section-head:first-child > span.muted { display: none; }
 .has-hero .view > .section-head:first-child { justify-content: flex-end; }
 .has-hero .view > p:first-of-type { max-width: 70ch; }
-#demo-banner { margin-top: 4px; }
+#demo-banner { margin-top: 14px; }
+#capacity progress { margin: 2px 0 14px; }
+.capacity-total { display: flex; justify-content: space-between; font-size: var(--t-footnote-size); color: var(--muted); border-top: 1px solid var(--hairline); padding-top: 10px; margin-top: 4px; }
+.capacity-total strong { color: var(--text); font-variant-numeric: tabular-nums; }
 .live-summary { display: block; }
 .heat-labelled { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 4px 0 8px; }
 .heat-cell { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: baseline; font-size: 13px; }
