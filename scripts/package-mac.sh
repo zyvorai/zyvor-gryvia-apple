@@ -70,6 +70,9 @@ hdiutil create -volname "Gryvia $VERSION" -srcfolder "$WORK/dmg" -fs HFS+ -forma
 
 mkdir -p "$WORK/root/Applications" "$WORK/pkgs"
 ditto --norsrc --noextattr "$APP" "$WORK/root/Applications/Gryvia.app"
+# pkgbuild turns any extended attribute left on a file into an AppleDouble (._*) entry in the payload
+xattr -cr "$WORK/root" 2>/dev/null || true
+find "$WORK/root" "$WORK/dmg" -name '._*' -delete
 pkgbuild --analyze --root "$WORK/root" "$WORK/component.plist" >/dev/null
 # Without this, Installer "relocates" the update into any other Gryvia.app it finds (e.g. a dev build).
 plutil -replace 0.BundleIsRelocatable -bool NO "$WORK/component.plist"
@@ -106,5 +109,8 @@ if [[ -n "$APP_ID" ]]; then
     fi
   fi
 fi
+# no AppleDouble files in any artifact
+strays="$(pkgutil --payload-files "$PKG" | grep -F '/._' || true)$(unzip -Z1 "$ZIP" | grep -F '/._' || true)"
+[[ -z "$strays" ]] || { echo "AppleDouble files in the artifacts:" >&2; echo "$strays" >&2; exit 3; }
 (cd "$OUT" && for f in "$(basename "$DMG")" "$(basename "$PKG")" "$(basename "$ZIP")"; do shasum -a 256 "$f" > "$f.sha256"; done)
 echo "wrote $DMG, $PKG and $ZIP ($status)"
