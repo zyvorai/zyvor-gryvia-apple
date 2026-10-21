@@ -3,7 +3,7 @@
 # Copyright © 2026 Zyvor AI Labs Private Limited
 set -euo pipefail
 cd "$(dirname "$0")/.."
-python3 -m tests.browser_server >/tmp/gryvia-browser-test.log 2>&1 &
+"${PYTHON:-python3}" -m tests.browser_server >/tmp/gryvia-browser-test.log 2>&1 &
 test_server_pid=$!
 trap 'kill "$test_server_pid" 2>/dev/null || true' EXIT
 for _ in {1..30}; do
