@@ -1183,7 +1183,7 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("About") {
-                Text("Gryvia Apple 0.4.3 · Business Source License 1.1")
+                Text("Gryvia Apple 0.5.0 · Business Source License 1.1")
                 Text("Copyright © 2026 Zyvor AI Labs Private Limited").foregroundStyle(.secondary)
             }
         }.formStyle(.grouped).frame(width: 420).padding()
