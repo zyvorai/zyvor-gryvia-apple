@@ -259,3 +259,8 @@ Changes and usage: [docs/FLEET-RELIABILITY.md](docs/FLEET-RELIABILITY.md).
 - **Verified (dev Mac):** `swift build` and `swift test` (27 tests) pass, including a new `LogStreamTests` for the SSE line parser (rows, keepalive, `end`, junk). The server side of the stream was already covered by `tests/test_api.py`.
 - **Not verified:** `API.followLogs` against a running server (the `URLSession.bytes` path has no test and I did not run the app); the polling fallback after a dropped stream; behaviour across a long job or a lost network.
 - **Behaviour:** the job detail starts with an empty log, follows the stream, and polls every 2 s if the stream fails or ends before the server's `end` event.
+
+## SwiftUI notification settings
+
+- **Verified (dev Mac):** `swift build` succeeds. Settings has a Notifications section: job finished/failed (default on, as before), a Mac goes offline (default off), and only when the app is in the background. The offline alert fires on an online-to-offline change, not for a Mac that was already offline at launch.
+- **Not verified:** that notifications actually appear (they need an app bundle and the system permission; `swift run` skips them), the toggles' runtime behaviour, and VoiceOver. There is no Swift test for this logic.
