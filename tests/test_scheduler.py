@@ -14,6 +14,13 @@ class SchedulerTests(unittest.TestCase):
         return self.store.submit(tenant,dict(runtime='demo',memoryGiB=4,**kw))
     def test_memory_fit(self):
         j=self.store.submit('default',dict(runtime='demo',memoryGiB=9)); self.assertIsNone(self.store.claim('mini')); self.assertIn('budget',self.store.snapshot()['jobs'][0]['reason'])
+    def test_wait_reason_is_stable_across_polls_and_updates_when_cause_changes(self):
+        j=self.store.submit('default',dict(runtime='demo',memoryGiB=9))
+        for _ in range(3): self.assertIsNone(self.store.claim('mini'))
+        reason=lambda: self.store.snapshot()['jobs'][0]['reason']
+        self.assertIn('budget',reason()); self.assertEqual(sum(1 for d in self.store.recent_decisions(50) if d['kind']=='wait'),1)   # one decision, not one per poll
+        self.node('mini',budget=16); self.assertEqual(self.store.claim('mini')['id'],j); self.assertEqual(reason(),'')
+    def test_claim_with_empty_queue(self): self.assertIsNone(self.store.claim('mini'))
     def test_priority(self):
         self.job(priority=1); high=self.job(priority=99); self.assertEqual(self.store.claim('mini')['id'],high)
     def test_tenant_quota(self):

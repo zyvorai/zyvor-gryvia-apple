@@ -190,3 +190,9 @@ Changes and usage: [docs/FLEET-RELIABILITY.md](docs/FLEET-RELIABILITY.md).
 
 - **Verified (simulated nodes, one Mac):** `tests/test_placement.py` covers selector validation, `avoidNodes`, `minGpuCores`, `minBudgetGiB`, the bounded yield (a slower Mac waits exactly 3 polls, then runs the job), immediate claim by the faster Mac, and no yield when the faster Mac is draining or busy, for non-GPU kinds, pinned jobs, similar core counts or unknown core counts.
 - **Not verified:** behaviour on two physical Macs with real core counts; the effect on queue latency under load; selectors in the web and SwiftUI submit forms (CLI/API JSON only).
+
+## Claim hot path
+
+- **Measured (dev Mac, Python 3.9, 3000 queued jobs, an idle Mac that can run none):** 17.3 ms → 10.6 ms per `claim` poll after parsing each queued body once and skipping unchanged-reason writes. A Mac with no free slot: ~0.03 ms. The benchmark was a scratch script and is not committed.
+- **Verified:** wait reasons stay stable across polls (one `wait` decision, not one per poll) and update when the cause changes; an empty-queue claim returns None; scheduler, placement, replica, fleet-reliability and deadline tests pass.
+- **Not verified:** 20+ Macs, Python 3.14, concurrent polls from several agents under load. The "N/2 full-queue scans per second" worry from the review is real but small at 2–5 Macs.

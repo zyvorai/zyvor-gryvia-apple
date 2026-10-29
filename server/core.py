@@ -83,6 +83,7 @@ class Store:
         CREATE TABLE IF NOT EXISTS join_codes(id TEXT PRIMARY KEY, hash TEXT NOT NULL UNIQUE, node TEXT, created REAL NOT NULL, expires REAL NOT NULL, used REAL);
         CREATE TABLE IF NOT EXISTS agent_tokens(hash TEXT PRIMARY KEY, node TEXT NOT NULL, created REAL NOT NULL);
         CREATE INDEX IF NOT EXISTS agent_tokens_node ON agent_tokens(node);
+        CREATE INDEX IF NOT EXISTS jobs_state ON jobs(state, node);
         CREATE TABLE IF NOT EXISTS usage(id INTEGER PRIMARY KEY AUTOINCREMENT, job TEXT, tenant TEXT, node TEXT, seconds REAL, gibSeconds REAL, at REAL);
         ''')
         cols=[r['name'] for r in self.db.execute('PRAGMA table_info(jobs)')]
@@ -332,9 +333,11 @@ class Store:
             tenants={r['id']:dict(r) for r in self.db.execute('SELECT * FROM tenants')}
             used={k:sum(json.loads(j['body'])['memoryGiB'] for j in active if j['tenant']==k) for k in tenants}
             pending=self.db.execute("SELECT * FROM jobs WHERE state='queued'").fetchall()
-            pending.sort(key=lambda j:(-json.loads(j['body'])['priority'],used[j['tenant']]/tenants[j['tenant']]['quota']/tenants[j['tenant']]['weight'],j['created'],j['id']))
+            if not pending: return None
+            parsed={j['id']:json.loads(j['body']) for j in pending}      # parse each queued body once per poll
+            pending.sort(key=lambda j:(-parsed[j['id']]['priority'],used[j['tenant']]/tenants[j['tenant']]['quota']/tenants[j['tenant']]['weight'],j['created'],j['id']))
             for j in pending:
-                b=json.loads(j['body']); reason=''
+                b=parsed[j['id']]; reason=''
                 deps=[self.db.execute('SELECT state FROM jobs WHERE id=?',(d,)).fetchone() for d in b.get('after',[])]
                 if any(d is None or d['state'] in ('failed','cancelled') for d in deps):
                     self.db.execute("UPDATE jobs SET state='cancelled',reason='dependency failed',finished=? WHERE id=?",(self.clock(),j['id'])); self.event('job.cancelled',j['id'],'dependency failed'); self.decide(j['id'],None,'cancel','a dependency failed'); continue
@@ -358,7 +361,8 @@ class Store:
                     except Problem as error: reason=error.message
                 if reason:
                     if j['reason']!=reason: self.decide(j['id'],node,'wait',reason)
-                    self.db.execute('UPDATE jobs SET reason=? WHERE id=?',(reason,j['id'])); continue
+                    if j['reason']!=reason: self.db.execute('UPDATE jobs SET reason=? WHERE id=?',(reason,j['id']))   # skip no-op writes: they dominated the poll cost
+                    continue
                 if b.get('kind')=='train':
                     self.db.execute('UPDATE jobs SET checkpoint_node=? WHERE id=?',(node,j['id']))
                 lease=uuid.uuid4().hex
