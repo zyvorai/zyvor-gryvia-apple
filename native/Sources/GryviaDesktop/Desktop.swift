@@ -433,9 +433,11 @@ struct ModelHubView: View {
                     }
                     .padding(16).frame(maxWidth: .infinity, alignment: .leading).card()
                 }
-                if let ds = fleet.state?.datasets, !ds.isEmpty {
+                if let all = fleet.state?.datasets, !all.isEmpty {
+                    let ds = all.filter { d in filter.isEmpty || [d.id, d.status, d.node].compactMap { $0 }.contains { $0.localizedCaseInsensitiveContains(filter) } }
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Datasets").font(.headline)
+                        if ds.isEmpty { Text("No datasets match “\(filter)”.").font(.callout).foregroundStyle(.secondary) }
                         ForEach(ds) { d in
                             HStack {
                                 Text(d.id).bold()
@@ -834,7 +836,7 @@ struct ContentView: View {
         case .fleet: fleetList
         case .workloads: workloads
         case .tenants: tenants
-        case .alerts: alertList
+        case .alerts: alertList(filter: filter)
         case .guide: GuideView(fleet: fleet)
         case .live: LiveView(fleet: fleet)
         case .models: ModelHubView(fleet: fleet, filter: filter)
@@ -1030,15 +1032,20 @@ struct ContentView: View {
         Button("Copy job ID") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(job.id, forType: .string) }
     }
 
-    var alertList: some View {
-        let items = fleet.alerts
+    func a_matches(_ a: FleetAlert, _ q: String) -> Bool {
+        a.title.localizedCaseInsensitiveContains(q) || a.detail.localizedCaseInsensitiveContains(q)
+    }
+
+    func alertList(filter: String) -> some View {
+        let items = fleet.alerts.filter { filter.isEmpty || a_matches($0, filter) }
         return Group {
-            if items.isEmpty {
+            if fleet.alerts.isEmpty {
                 AllClear()
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         PaneHeader(title: "Alerts", eyebrow: "Govern", subtitle: "Things that need a look: offline Macs, thermal limits, failed jobs.", trailing: "\(items.count) open")
+                        if items.isEmpty { Text("No alerts match “\(filter)”.").font(.callout).foregroundStyle(.secondary) }
                         ForEach(items) { a in
                             let tone: Color = a.level == .error ? .red : .secondary
                             HStack(spacing: 12) {
