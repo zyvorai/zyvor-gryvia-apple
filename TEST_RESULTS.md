@@ -219,3 +219,8 @@ Changes and usage: [docs/FLEET-RELIABILITY.md](docs/FLEET-RELIABILITY.md).
 
 - **Verified (dev Mac):** `swift build` and `swift test` pass (existing XCTest suites; nothing new added: the Desktop target is an executable and has no test target). `GryviaDesktop --snapshot` against the Playwright fixture server rendered the Fleet pane and the Add-a-Mac sheet in light and dark; the sheet and the new chips were checked by eye in the light PNGs only (dark PNGs were written but not looked at).
 - **Not verified:** the sheet creating, listing and revoking real codes (only its preview state was rendered; the endpoints themselves are covered by `tests/test_enroll.py`); the clipboard copy; VoiceOver reading of the code; the Add-a-Mac flow against an HTTPS control plane; role chip for Macs running mixed job kinds.
+
+## SwiftUI: capacity bar, Model hub filter, VoiceOver values
+
+- **Verified (dev Mac):** `swift build` passes; `GryviaDesktop --snapshot` against the Playwright fixture server rendered the Fleet pane with the capacity bar (fill = 4.0 of 12 GiB reserved, tick = 3.0 GiB in use) in light mode, checked by eye.
+- **Not verified:** the Model hub filter (compiled, not exercised: snapshots cannot type into the search field); what VoiceOver actually announces for the bar and rows (labels were written, no screen-reader run); dark-mode PNGs; the decorative icon now hidden from VoiceOver; no new automated Swift tests.

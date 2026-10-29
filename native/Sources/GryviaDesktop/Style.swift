@@ -124,3 +124,29 @@ extension Color {
     }
 }
 #endif
+
+#if os(macOS)
+/// Memory bar for a Mac: the filled part is what admission has *reserved* (bookkeeping), the tick is GPU memory this agent
+/// has allocated. Neither is whole-system use. VoiceOver reads the same numbers.
+struct CapacityBar: View {
+    let reserved: Double, budget: Double
+    var inUseGiB: Double?
+    let label: String
+    var body: some View {
+        let total = max(budget, 0.001)
+        GeometryReader { g in
+            ZStack(alignment: .leading) {
+                Capsule().fill(.quaternary)
+                Capsule().fill(Color.accentColor).frame(width: g.size.width * min(1, reserved / total))
+                if let u = inUseGiB {
+                    Rectangle().fill(.primary).frame(width: 2).offset(x: g.size.width * min(1, u / total) - 1)
+                }
+            }.clipShape(Capsule())
+        }
+        .frame(height: 8)
+        .accessibilityElement()
+        .accessibilityLabel(label)
+        .accessibilityValue(String(format: "%.1f of %.0f GiB reserved", reserved, budget) + (inUseGiB.map { String(format: ", %.1f GiB in use by this agent", $0) } ?? ""))
+    }
+}
+#endif
