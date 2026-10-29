@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: BUSL-1.1
 # Copyright © 2026 Zyvor AI Labs Private Limited
-import argparse, json, os, secrets, ssl, threading
+import argparse, json, os, secrets, ssl, sys, threading
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -320,7 +320,9 @@ class API(BaseHTTPRequestHandler):
             self.send(200,{'ok':True})
         except Problem as e: self.send(e.status,{'error':e.message})
         except (KeyError,TypeError,ValueError): self.send(400,{'error':'invalid request fields'})
-        except Exception: self.send(500,{'error':'internal error'})
+        except Exception:
+            import traceback; print('internal error on %s %s'%(self.command,urlsplit(self.path).path),file=sys.stderr); traceback.print_exc(); sys.stderr.flush()   # path and stack only: never bodies or tokens
+            self.send(500,{'error':'internal error'})
 
 def make_server(store,tokens,host='127.0.0.1',port=8443):
     server=ControlPlaneServer((host,port),API); server.store=store; server.tokens=tokens; server.enroll_limiter=FailureLimiter(); server.backup_dir=None
