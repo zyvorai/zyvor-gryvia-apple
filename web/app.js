@@ -463,7 +463,7 @@ function renderLive() {
       <header><h3>${esc(n.id)}</h3>${badge(n.online ? 'online' : 'offline')}</header>
       <p>${esc([n.gpuModel || n.gpu || 'Apple GPU', nc ? nc + ' GPU cores' : 'cores unknown', n.totalGiB ? n.totalGiB.toFixed(0) + ' GiB unified memory' : ''].filter(Boolean).join(' · '))}</p>
       <div class="gpu-util">${util === null ? '—' : util.toFixed(0) + '%'} <small>GPU busy</small></div>
-      ${nc ? `<div class="cores" aria-label="${nc} GPU cores, ${util === null ? 'unknown' : util.toFixed(0) + '% busy'}">${coreCells}</div>` : ''}
+      ${nc ? `<div class="cores" role="img" aria-label="${nc} GPU cores, ${util === null ? 'unknown' : util.toFixed(0) + '% busy'}">${coreCells}</div>` : ''}
       ${spark}
       <div class="membar" aria-label="Memory">${segs}${mark}</div>
       <div class="legend"><span>${reservedOn(n.id, jobs).toFixed(1)} GiB reserved by ${mine.length} job${mine.length === 1 ? '' : 's'}</span>${n.gpuInUseMiB ? `<span>▏ ${(n.gpuInUseMiB / 1024).toFixed(1)} GiB in use</span>` : ''}<span>${esc(n.thermal || 'thermal unknown')}</span></div>

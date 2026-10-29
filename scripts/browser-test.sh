@@ -11,3 +11,4 @@ for _ in {1..30}; do
   sleep 0.2
 done
 node tests/browser.cjs
+node tests/a11y.cjs

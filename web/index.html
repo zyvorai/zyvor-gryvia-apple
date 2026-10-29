@@ -147,7 +147,7 @@ gryvia.py drain MAC_ID               # stop new work on a Mac</pre>
     </section>
     <div id="gpu-cards" class="gpu-grid"></div>
     <div class="grid">
-      <section class="panel"><h3>Scheduler decisions</h3><div id="decision-feed" class="feed"></div></section>
+      <section class="panel"><h3>Scheduler decisions</h3><div id="decision-feed" class="feed" tabindex="0" role="region" aria-label="Scheduler decisions"></div></section>
       <section class="panel"><h3>How to read this</h3>
         <p>Each Apple Silicon Mac has <strong>one GPU</strong> made of many cores. The grid lights cores in proportion to the GPU's measured busy percentage.</p>
         <p>Utilisation is the whole Mac's GPU load (it includes other apps). Job reservations are the memory each job set aside for admission; the marker shows what the GPU is actually using.</p>
@@ -163,7 +163,7 @@ gryvia.py drain MAC_ID               # stop new work on a Mac</pre>
     <section id="idle-panel" class="panel"><h3>Idle deployments <small id="idle-note"></small></h3>
       <div class="toolbar"><label>Idle for more than <select id="idle-window" aria-label="Idle window"><option value="900">15 minutes</option><option value="3600" selected>1 hour</option><option value="21600">6 hours</option><option value="86400">1 day</option></select></label>
         <button id="evict-idle-btn" disabled>Evict idle</button></div>
-      <div id="idle-list"></div>
+      <div id="idle-list" tabindex="0" role="region" aria-label="Idle deployments"></div>
       <p class="muted">Eviction stops the model server and frees its reservation; the model stays ready and can be deployed again. Reserved figures are admission bookkeeping, not measured GPU utilisation.</p></section>
     <section class="panel"><h3>Trend <small id="trend-note"></small></h3><div id="trend" class="trend"></div></section>
     <section class="panel"><h3>Recent workloads</h3><div id="recent"></div></section>
@@ -172,7 +172,7 @@ gryvia.py drain MAC_ID               # stop new work on a Mac</pre>
   <section id="fleet" class="view hidden"><div class="section-head"><h2>Mac fleet</h2><div class="toolbar"><input id="node-filter" placeholder="Filter Macs" aria-label="Filter Macs"><span>Drain nodes safely before maintenance</span></div></div><section id="add-mac" class="panel"><h3>Add a Mac</h3>
       <p class="muted">Create a single-use code, then run the command on the new Mac. The code expires in 15 minutes and is shown only once.</p>
       <div class="actions"><button id="join-create" class="primary">Create join code</button></div>
-      <div id="join-result" aria-live="polite"></div><div id="join-list"></div></section>
+      <div id="join-result" aria-live="polite"></div><div id="join-list" tabindex="0" role="region" aria-label="Join codes"></div></section>
     <div id="nodes" class="node-grid"></div></section>
 
   <section id="jobs" class="view hidden">
@@ -239,7 +239,7 @@ gryvia.py drain MAC_ID               # stop new work on a Mac</pre>
   <section id="datasets" class="view hidden">
     <div class="section-head"><h2>Datasets</h2><div class="toolbar"><input id="dataset-filter" placeholder="Filter datasets" aria-label="Filter datasets"></div></div>
     <p>Data you train and evaluate with. Files live on a Mac under its managed models folder; Gryvia records the size, row count and SHA-256.</p>
-    <section class="panel"><div id="dataset-list"></div></section>
+    <section class="panel"><div id="dataset-list" tabindex="0" role="region" aria-label="Datasets"></div></section>
     <section class="panel"><h3>Add from Hugging Face</h3>
       <form id="dataset-form" class="form-grid">
         <label>Dataset ID<input name="id" required placeholder="my-instructions"></label>
@@ -277,7 +277,7 @@ gryvia.py drain MAC_ID               # stop new work on a Mac</pre>
       </form>
       <p class="muted"><small>Training uses this Mac's single GPU; the run appears in Live and Workloads like any job. Loss charts update as MLX reports them.</small></p>
     </section>
-    <section class="panel"><h3>Runs</h3><div id="train-runs"></div></section>
+    <section class="panel"><h3>Runs</h3><div id="train-runs" tabindex="0" role="region" aria-label="Training runs"></div></section>
     <section class="panel" id="sweep-panel"><h3>Sweep</h3>
       <form id="sweep-form" class="form-grid compact">
         <label class="span2">Base model (MLX repo or local path)<input name="base" list="mlx-models" required placeholder="mlx-community/SmolLM-135M-Instruct-4bit"></label>
@@ -290,7 +290,7 @@ gryvia.py drain MAC_ID               # stop new work on a Mac</pre>
         <div class="form-action"><button class="primary">Start sweep</button></div>
       </form>
       <p class="muted"><small id="sweep-estimate"></small></p>
-      <div id="sweep-results"></div>
+      <div id="sweep-results" tabindex="0" role="region" aria-label="Sweep results"></div>
     </section>
     <section class="panel" id="train-chart-panel" hidden><h3 id="train-chart-title">Loss</h3><div id="train-chart"></div></section>
   </section>
@@ -318,7 +318,7 @@ gryvia.py drain MAC_ID               # stop new work on a Mac</pre>
   </section>
 
   <section id="tenants" class="view hidden"><h2>Tenants &amp; quotas</h2>
-    <section class="panel" id="tenant-list"></section>
+    <section class="panel" id="tenant-list" tabindex="0" role="region" aria-label="Tenants"></section>
     <section class="panel"><h3>Reservation metering</h3><div id="usage-list"></div><p>Worker time and reserved GiB-seconds are allocation estimates, not measured GPU utilization or invoices.</p></section>
     <section class="panel"><h3>Set tenant policy</h3><form id="tenant-form" class="form-grid">
       <label>Tenant ID<input name="id" required></label>
@@ -328,7 +328,7 @@ gryvia.py drain MAC_ID               # stop new work on a Mac</pre>
       <button class="primary">Save policy</button></form></section></section>
 
   <section id="alerts" class="view hidden"><h2>Alerts</h2><section class="panel" id="alert-list"></section></section>
-  <section id="audit" class="view hidden"><div class="section-head"><h2>Activity trail</h2><div class="toolbar"><input id="event-filter" placeholder="Filter activity" aria-label="Filter activity"></div></div><section class="panel" id="events"></section></section>
+  <section id="audit" class="view hidden"><div class="section-head"><h2>Activity trail</h2><div class="toolbar"><input id="event-filter" placeholder="Filter activity" aria-label="Filter activity"></div></div><section class="panel" id="events" tabindex="0" role="region" aria-label="Activity"></section></section>
 
   <section id="settings" class="view hidden"><h2>Settings</h2>
     <section class="panel"><h3>Appearance</h3>
@@ -339,7 +339,7 @@ gryvia.py drain MAC_ID               # stop new work on a Mac</pre>
       </div>
       <h3 class="gap">Accent</h3><div id="accents" class="swatches" role="radiogroup" aria-label="Accent colour"></div>
       <label class="remember gap"><input type="checkbox" id="set-reduce"> Reduce transparency</label>
-      <label class="remember gap"><input type="checkbox" id="set-notify"> Notify me when a workload finishes or fails, or a Mac goes offline <small id="notify-note" class="muted"></small></label>
+      <label class="remember wrap gap"><input type="checkbox" id="set-notify"> Notify me when a workload finishes or fails, or a Mac goes offline <small id="notify-note" class="muted"></small></label>
     </section>
     <section class="panel"><h3>About</h3>
       <p><strong>Gryvia Apple</strong> 0.4.3 · native Apple Silicon workload scheduling.</p>

@@ -196,3 +196,9 @@ Changes and usage: [docs/FLEET-RELIABILITY.md](docs/FLEET-RELIABILITY.md).
 - **Measured (dev Mac, Python 3.9, 3000 queued jobs, an idle Mac that can run none):** 17.3 ms → 10.6 ms per `claim` poll after parsing each queued body once and skipping unchanged-reason writes. A Mac with no free slot: ~0.03 ms. The benchmark was a scratch script and is not committed.
 - **Verified:** wait reasons stay stable across polls (one `wait` decision, not one per poll) and update when the cause changes; an empty-queue claim returns None; scheduler, placement, replica, fleet-reliability and deadline tests pass.
 - **Not verified:** 20+ Macs, Python 3.14, concurrent polls from several agents under load. The "N/2 full-queue scans per second" worry from the review is real but small at 2–5 Macs.
+
+## Mobile layout and accessibility (axe-core 4.10.2)
+
+- **Found by the new check, then fixed:** horizontal page scroll at 390 px on Datasets, Activity and Settings (and Training after visiting other views); light-mode text contrast below 4.5:1 for accent text on its tint, the queued/succeeded/failed badges, decision-feed labels, and the done-step "Run a demo job" button (faded by `opacity`); GPU core grid labelled without a role; scrollable regions that were not keyboard-focusable.
+- **Verified (dev Mac, Chromium via Playwright):** 16 views × {1440, 390 px} × {light, dark} report no horizontal scroll and no axe `wcag2a`/`wcag2aa` violations, on fixture data from `tests/browser_server.py`.
+- **Not verified:** other accent colours (`brand/tokens.json` lists several; only the default blue was checked); dialogs and drawers that are closed in this walk; states with real error toasts; screen-reader announcements; keyboard order; the SwiftUI app; Safari and Firefox.

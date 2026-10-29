@@ -19,6 +19,8 @@ All colours come from `brand/tokens.json` → `web/tokens.css` and `GryviaCore/B
 Sidebar: **Get started**; **Monitor** (Live, Overview, Mac fleet, Timeline); **Build** (Model hub, Datasets, Training, Playground); **Run** (Workloads, Workflows, Deployments); **Govern** (Tenants, Alerts, Activity, Settings). Mac fleet holds **Add a Mac** (single-use join codes). Job logs stream live (SSE, polling fallback). Workloads sort by priority, memory or state; Mac fleet, Model hub, Datasets and Activity have filters. Desktop notifications are opt-in (Settings), fire only while the tab is hidden, and never contain tokens. Breakpoints 1100px and 767px; no horizontal scroll at 390px.
 
 ## Author checklist
+Checked automatically (`tests/a11y.cjs`, run by `scripts/browser-test.sh` and CI): every view at 1440 px and 390 px, light and dark, has no horizontal page scroll and no axe-core WCAG 2.x A/AA violation. Not checked automatically: AAA, keyboard-order, screen-reader output, non-default accent colours, the SwiftUI app.
+
 1. Both window styles, light and dark.
 2. 390px: nothing cut off.
 3. Empty and error states explain themselves.
