@@ -248,3 +248,8 @@ Changes and usage: [docs/FLEET-RELIABILITY.md](docs/FLEET-RELIABILITY.md).
 
 - **Verified (dev Mac):** `swift build` succeeds with a sort menu on the Workloads pane (Newest, Oldest, Memory, Priority, State) that has an accessibility label.
 - **Not verified:** the picker's runtime behaviour or VoiceOver reading (no UI run or snapshot taken); the CI `native` job only builds and tests.
+
+## SwiftUI Datasets and Alerts filter
+
+- **Verified (dev Mac):** `swift build` succeeds. The toolbar search field now also filters the Datasets list (id, status, Mac) and the Alerts pane (title, detail); a filter with no matches shows "No ... match" instead of the "all clear" state.
+- **Not verified:** runtime behaviour (no UI run or snapshot), VoiceOver. There is no Swift test for the filter logic.
