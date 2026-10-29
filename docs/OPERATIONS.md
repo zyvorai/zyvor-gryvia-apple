@@ -18,6 +18,26 @@ Drain stops new claims and preserves active jobs. Cancel sends a request acknowl
 
 Do not sleep your Mac workers during active jobs. Before restarting a worker, drain and cancel its active workload, then confirm the child has exited. If the worker disappeared unexpectedly, inspect its direct process and kill any survivor before reopening admission. Database fencing cannot prove that a surviving process has stopped using Metal.
 
+## Using TLS on a home or office network
+
+A control plane that other Macs reach must serve HTTPS (the Swift agent and desktop app refuse plain HTTP to anything but loopback). Without a public domain, a small private CA works:
+
+```sh
+# once, on any Mac: a CA and a server certificate whose names match how agents reach the server
+openssl req -x509 -newkey rsa:2048 -nodes -keyout ca.key -out ca.crt -days 365 -subj "/CN=Gryvia LAN CA"
+openssl req -newkey rsa:2048 -nodes -keyout srv.key -out srv.csr -subj "/CN=studio.local"
+printf "subjectAltName=DNS:studio.local,IP:192.168.1.20\nextendedKeyUsage=serverAuth\n" > ext.cnf
+openssl x509 -req -in srv.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out srv.crt -days 365 -extfile ext.cnf
+chmod 600 ca.key srv.key
+python3 -m server.app --config config.json --host 0.0.0.0 --port 8443 --cert srv.crt --key srv.key
+```
+
+Then trust `ca.crt` on every Mac that talks to the server (agents, the desktop app, the CLI): `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ca.crt`. Keep `ca.key` offline once the certificates are issued, and renew before `-days` runs out (an expired certificate stops every agent). Use the name or address in the certificate's `subjectAltName` in `--server` and in the join command.
+
+The server accepts TLS 1.2 or newer. Mutual TLS (client certificates for agents) is not implemented; agents authenticate with their bearer token, so keep the network trusted and revoke a lost Mac with `gryvia revoke-node`.
+
+**Verified (dev Mac, loopback):** with a certificate made by the recipe above, the server answered `/healthz` to a client that trusted the CA, a client without the CA got `CERTIFICATE_VERIFY_FAILED`, and a TLS 1.1-only client could not connect. **Not verified:** the `security add-trusted-cert` step, the Swift agent or desktop app against a private-CA server, certificate renewal, and any non-loopback address.
+
 ## Logs and retention
 
 SQLite stores up to 2,000 log entries per job. The Swift agent buffers at most 500 pending lines and sends bounded batches; high-volume output is bounded with an explicit overflow marker. Unsent batch tails are retained; individual lines are limited to 2,000 Unicode scalars. Do not put secrets in prompts or runtime output. Events, jobs and metering history are not automatically pruned in this release. Plan retention and backup policy before long-lived deployment.
