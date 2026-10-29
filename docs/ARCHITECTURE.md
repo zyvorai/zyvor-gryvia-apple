@@ -14,6 +14,8 @@ Placement is pull-based: each Mac claims the best queued job that fits it. A job
 
 For GPU-bound kinds (train, benchmark, evaluate, quantize, fuse, serve) a Mac yields a job for at most 3 polls to another Mac that could run it right now and reports more than 25% more GPU cores. This is a hint, not a guarantee, and it is bounded so nothing starves. Core count is a proxy for speed, not a measurement; Gryvia does not benchmark Macs against each other. Jobs pinned with `node`, with a training checkpoint, or on Macs that do not report core counts never yield.
 
+Poll cost (measured on the dev Mac, Python 3.9, one SQLite file): a Mac with no free slot returns in about 0.03 ms; an idle Mac that can run none of 3000 queued jobs takes about 10 ms (17 ms before 0.4.4's no-op-write fix). Each poll runs inside the single write transaction, so cost grows with queue length, not with the number of Macs. For 2–5 Macs this is negligible; it has not been measured on 20+ Macs or on the 3.14 interpreter the project targets.
+
 ## Resource accounting
 
 MemoryGiB is a reservation for expected job demand. The controller atomically checks the node's remaining budget and the tenant's concurrent quota. Its fairness score is normalized memory use divided by queue weight; this is **not multi-resource DRF**. Runtime compatibility, node selection, health, drain and available execution slots are admission gates.
