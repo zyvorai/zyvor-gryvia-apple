@@ -237,3 +237,9 @@ Changes and usage: [docs/FLEET-RELIABILITY.md](docs/FLEET-RELIABILITY.md).
 - **Found and fixed (all pre-existing, none caused a failure in testing):** unlocked reads or writes in `submit` (model provenance check), `verify_chain`, `node_policy`, `sweep` (tenant and base-model checks, and the `sweep.created` event), `cancel_sweep`, `cancel_workflow`, and `last_activity_at`. Each could interleave with another handler thread on the shared connection like the `agent_actor` bug. Seven test helpers that read the database directly now take the lock too.
 - **Verified (dev Mac, Python 3.9):** 263 tests with the checker on: 0 violations (the one error is `test_runtimes`, which needs Python 3.10+ to import); `scripts/multi-agent-smoke.py` 3 of 3 with the checker also on in the server process. `make verify`, `scripts/verify.sh` and CI now run the suite with the checker on.
 - **Not verified:** code paths no test exercises (the checker only sees what runs); that these fixes remove any observed failure (none was observed; this is hardening); Python 3.14 locally; the checker relies on CPython's private `RLock._is_owned`.
+
+## Orphaned runtime children after an agent is killed
+
+- **Verified (dev Mac, Python 3.9, standalone run of the new test body):** `tests/test_runtimes.py::ParentLossTests` starts a throwaway parent, a wrapper using `_common.ManagedProcess` and a `/bin/sleep 300` child, `kill -9`s the parent, and checks the child is gone within 5 s. It passed in 0.17 s with no leftover process. This is the same `ManagedProcess` that `llama_serve.py` and the other bundled wrappers use.
+- **Not verified:** a real `llama-server` or MLX process (no GGUF model on this Mac); the test file itself under the project's Python 3.14 (it does not import on 3.9, CI covers it); executables an administrator configures that do not use `ManagedProcess`; a wrapper that is itself `SIGKILL`ed.
+
