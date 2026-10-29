@@ -253,3 +253,9 @@ Changes and usage: [docs/FLEET-RELIABILITY.md](docs/FLEET-RELIABILITY.md).
 
 - **Verified (dev Mac):** `swift build` succeeds. The toolbar search field now also filters the Datasets list (id, status, Mac) and the Alerts pane (title, detail); a filter with no matches shows "No ... match" instead of the "all clear" state.
 - **Not verified:** runtime behaviour (no UI run or snapshot), VoiceOver. There is no Swift test for the filter logic.
+
+## SwiftUI live log streaming
+
+- **Verified (dev Mac):** `swift build` and `swift test` (27 tests) pass, including a new `LogStreamTests` for the SSE line parser (rows, keepalive, `end`, junk). The server side of the stream was already covered by `tests/test_api.py`.
+- **Not verified:** `API.followLogs` against a running server (the `URLSession.bytes` path has no test and I did not run the app); the polling fallback after a dropped stream; behaviour across a long job or a lost network.
+- **Behaviour:** the job detail starts with an empty log, follows the stream, and polls every 2 s if the stream fails or ends before the server's `end` event.

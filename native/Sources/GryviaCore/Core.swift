@@ -80,6 +80,21 @@ public struct LogLine: Codable, Sendable, Identifiable {
     public let seq: Int; public let at: Double; public let text: String
     public var id: Int { seq }
 }
+/// Parses one line of the server's `/api/logs/{id}/stream` Server-Sent Events.
+public enum LogStreamEvent: Equatable, Sendable {
+    case rows([LogLine]), end, ignore
+    public static func parse(_ line: String, pendingEnd: inout Bool) -> LogStreamEvent {
+        if line.hasPrefix("event: end") { pendingEnd = true; return .ignore }
+        guard line.hasPrefix("data: ") else { return .ignore }
+        if pendingEnd { pendingEnd = false; return .end }
+        let body = Data(line.dropFirst(6).utf8)
+        guard let rows = try? JSONDecoder().decode([LogLine].self, from: body) else { return .ignore }
+        return .rows(rows)
+    }
+}
+extension LogLine: Equatable {
+    public static func == (a: LogLine, b: LogLine) -> Bool { a.seq == b.seq && a.at == b.at && a.text == b.text }
+}
 public enum JobStateStyle {
     /// SF Symbol + semantic colour name for a job state; shared by app and tests.
     public static func symbol(_ state: String) -> String {
@@ -117,6 +132,34 @@ public struct API: Sendable {
     public func logs(_ id: String) async throws -> [LogLine] {
         let encoded=id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
         return try JSONDecoder().decode([LogLine].self, from: await request("api/logs/"+encoded))
+    }
+    /// Follows a job's log over SSE. Finishes normally on the server's `end` event; throws if the stream drops first,
+    /// so callers can fall back to polling `logs(_:)`.
+    public func followLogs(_ id: String, after: Int = 0) -> AsyncThrowingStream<[LogLine], Error> {
+        AsyncThrowingStream { cont in
+            let task = Task {
+                do {
+                    let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+                    var comps = URLComponents(url: base.appendingPathComponent("api/logs/\(encoded)/stream"), resolvingAgainstBaseURL: false)!
+                    comps.queryItems = [URLQueryItem(name: "after", value: String(after))]
+                    var req = URLRequest(url: comps.url!); req.timeoutInterval = 15   // the server sends a keepalive every second
+                    req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                    req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                    let (bytes, response) = try await URLSession.shared.bytes(for: req)
+                    guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw GryviaError.invalid("Log stream unavailable") }
+                    var pendingEnd = false
+                    for try await line in bytes.lines {
+                        switch LogStreamEvent.parse(line, pendingEnd: &pendingEnd) {
+                        case .rows(let rows): cont.yield(rows)
+                        case .end: cont.finish(); return
+                        case .ignore: break
+                        }
+                    }
+                    throw GryviaError.invalid("Log stream ended early")
+                } catch { cont.finish(throwing: error) }
+            }
+            cont.onTermination = { _ in task.cancel() }
+        }
     }
     public func results() async throws -> [ResultRow] {
         try JSONDecoder().decode([ResultRow].self, from: await request("api/results"))
