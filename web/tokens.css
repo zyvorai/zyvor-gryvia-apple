@@ -2,7 +2,7 @@
 :root {
   --accent-color: #0088ff;
   --accent-soft: color-mix(in srgb, var(--accent-color) 14%, transparent);
-  --accent-text: color-mix(in srgb, var(--accent-color) 82%, black);
+  --accent-text: color-mix(in srgb, var(--accent-color) 70%, black);   /* >= 4.5:1 on --accent-soft over the light surfaces for the default blue */
   --accent-2: color-mix(in srgb, var(--accent-color) 60%, white);
   --accent-strong: color-mix(in srgb, var(--accent-color) 86%, black);   /* white text on this is >= 4.5:1 for the default blue */
   --on-accent: #fff;

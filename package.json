@@ -6,6 +6,7 @@
     "test:web": "bash scripts/browser-test.sh"
   },
   "devDependencies": {
+    "axe-core": "4.10.2",
     "playwright": "1.64.1"
   }
 }

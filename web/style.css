@@ -72,9 +72,9 @@ label { font-size: var(--t-caption-size); color: var(--muted); display: grid; ga
 .badge { display: inline-flex; align-items: center; gap: 6px; border-radius: var(--r-pill); padding: 2px 10px; font-size: 11.5px; font-weight: 600; background: var(--fill); color: var(--muted); }
 .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .9; }
 .badge.running { background: color-mix(in srgb, var(--status-running) 14%, transparent); color: var(--accent-text); }
-.badge.queued, .badge.cancelling { background: color-mix(in srgb, var(--status-queued) 16%, transparent); color: color-mix(in srgb, var(--status-queued) 70%, var(--text)); }
-.badge.succeeded, .badge.online { background: color-mix(in srgb, var(--status-succeeded) 16%, transparent); color: color-mix(in srgb, var(--status-succeeded) 62%, var(--text)); }
-.badge.failed, .badge.offline { background: color-mix(in srgb, var(--status-failed) 14%, transparent); color: color-mix(in srgb, var(--status-failed) 70%, var(--text)); }
+.badge.queued, .badge.cancelling { background: color-mix(in srgb, var(--status-queued) 16%, transparent); color: color-mix(in srgb, var(--status-queued) 50%, var(--text)); }
+.badge.succeeded, .badge.online { background: color-mix(in srgb, var(--status-succeeded) 16%, transparent); color: color-mix(in srgb, var(--status-succeeded) 50%, var(--text)); }
+.badge.failed, .badge.offline { background: color-mix(in srgb, var(--status-failed) 14%, transparent); color: color-mix(in srgb, var(--status-failed) 50%, var(--text)); }
 .label { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent-text); margin-right: 4px; font-weight: 600; }
 .count { margin-left: auto; background: var(--status-failed); color: #fff; font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: var(--r-pill); }
 .seg { display: inline-flex; padding: 3px; border-radius: var(--r-pill); background: var(--fill); gap: 2px; }
@@ -110,7 +110,7 @@ progress::-webkit-progress-value { background: linear-gradient(90deg, var(--acce
 .queue-line, .capacity-row { display: flex; justify-content: space-between; font-size: var(--t-footnote-size); }
 .queue-line { padding: 10px 0; border-bottom: 1px solid var(--hairline); }
 .steps { margin: 0 0 12px; padding-left: 22px; display: grid; gap: 12px; } .steps li { color: var(--text); } .steps li span { color: var(--muted); }
-.steps li.done { opacity: .6; } .steps li.done::marker { content: "✓ "; color: var(--status-succeeded); }
+.steps li.done { color: var(--muted); }   /* not opacity: that faded the buttons inside below 4.5:1 */ .steps li.done::marker { content: "✓ "; color: var(--status-succeeded); }
 .glossary { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; } .glossary dt { font-weight: 600; } .glossary dd { margin: 0; color: var(--muted); }
 .welcome { border-color: color-mix(in srgb, var(--accent-color) 35%, var(--hairline)); background: linear-gradient(160deg, color-mix(in srgb, var(--accent-color) 9%, var(--surface)), var(--surface)); }
 .policy select { margin-top: 4px; }
@@ -207,7 +207,7 @@ header .eyebrow { display: none; }
 .feed { display: grid; gap: 6px; max-height: 280px; overflow: auto; font-size: var(--t-footnote-size); }
 .feed div { display: flex; gap: 10px; align-items: baseline; }
 .feed time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11.5px; min-width: 64px; }
-.feed .k-admit { color: color-mix(in srgb, var(--status-succeeded) 70%, var(--text)); } .feed .k-wait { color: color-mix(in srgb, var(--status-queued) 75%, var(--text)); } .feed .k-failed { color: var(--status-failed); } .feed .k-yield { color: var(--status-queued); }
+.feed .k-admit { color: color-mix(in srgb, var(--status-succeeded) 50%, var(--text)); } .feed .k-wait { color: color-mix(in srgb, var(--status-queued) 50%, var(--text)); } .feed .k-failed { color: var(--status-failed); } .feed .k-yield { color: var(--status-queued); }
 
 /* live */
 .live-summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 4px; }
@@ -241,7 +241,7 @@ header .eyebrow { display: none; }
 .flow-col h4 { margin: 0 0 4px; font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 .flow-gate { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 6px; border: 1.5px dashed var(--line); border-radius: var(--r-control); padding: 10px; font-size: 12px; color: var(--muted); background: var(--surface); }
 .flow-gate strong { color: var(--text); font-size: 14px; }
-.flow-gate .reason { display: inline-block; background: color-mix(in srgb, var(--status-queued) 16%, transparent); color: color-mix(in srgb, var(--status-queued) 70%, var(--text)); padding: 2px 10px; border-radius: var(--r-pill); font-size: 11.5px; font-weight: 600; }
+.flow-gate .reason { display: inline-block; background: color-mix(in srgb, var(--status-queued) 16%, transparent); color: color-mix(in srgb, var(--status-queued) 50%, var(--text)); padding: 2px 10px; border-radius: var(--r-pill); font-size: 11.5px; font-weight: 600; }
 .lane-row { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--r-small); padding: 8px 10px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; min-height: 46px; }
 .lane-row > small { width: 100%; }
 .job-chip { display: inline-flex; flex-direction: column; border-radius: 10px; padding: 5px 11px; font-size: 12px; color: #fff; background: var(--hue-c, hsl(var(--hue) 70% 46%)); line-height: 1.25; will-change: transform; box-shadow: 0 2px 8px color-mix(in srgb, var(--hue-c, hsl(var(--hue) 70% 46%)) 40%, transparent); font-weight: 600; }
@@ -367,3 +367,7 @@ tr.best td { background: color-mix(in srgb, var(--status-succeeded) 8%, transpar
 
 .mono{font-family:var(--font-mono)}
 pre.mono{overflow-x:auto;white-space:pre-wrap;word-break:break-all;margin:8px 0 0}
+
+/* tables rendered into these containers scroll inside them instead of widening the page on phones */
+#dataset-list, #events, #train-runs, #tenant-list, #join-list, #idle-list, #sweep-results { overflow-x: auto; }
+.remember.wrap { white-space: normal; align-items: flex-start; }
