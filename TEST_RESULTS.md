@@ -264,3 +264,8 @@ Changes and usage: [docs/FLEET-RELIABILITY.md](docs/FLEET-RELIABILITY.md).
 
 - **Verified (dev Mac):** `swift build` succeeds. Settings has a Notifications section: job finished/failed (default on, as before), a Mac goes offline (default off), and only when the app is in the background. The offline alert fires on an online-to-offline change, not for a Mac that was already offline at launch.
 - **Not verified:** that notifications actually appear (they need an app bundle and the system permission; `swift run` skips them), the toggles' runtime behaviour, and VoiceOver. There is no Swift test for this logic.
+
+## TLS guidance for a private network
+
+- **Verified (dev Mac, loopback, LibreSSL 3.3.6 and Python 3.9):** the certificate recipe in `docs/OPERATIONS.md` produced a certificate the server loaded; a client trusting the CA got `{"status": "ok"}` from `/healthz`, a client without it got `CERTIFICATE_VERIFY_FAILED`, and a TLS 1.1-only client could not connect.
+- **Not verified:** `security add-trusted-cert`, the Swift agent or desktop app against a private-CA server, a remote address, renewal, mutual TLS (not implemented).
