@@ -39,6 +39,21 @@ def start_auto_evict(server,seconds,interval):
             except Exception: print('auto idle eviction failed',flush=True)
     t=threading.Thread(target=loop,name='auto-evict',daemon=True); t.start(); return t
 
+class FailureLimiter:
+    """Sliding-window failure counter per client address (in memory; resets on restart)."""
+    def __init__(self,limit=8,window=300,clock=None):
+        import time
+        self.limit,self.window,self.clock,self.fails,self.lock=limit,window,clock or time.time,{},threading.Lock()
+    def _recent(self,who):
+        now=self.clock(); xs=[t for t in self.fails.get(who,[]) if now-t<self.window]
+        if xs: self.fails[who]=xs
+        else: self.fails.pop(who,None)
+        return xs
+    def blocked(self,who):
+        with self.lock: return len(self._recent(who))>=self.limit
+    def fail(self,who):
+        with self.lock: self._recent(who); self.fails.setdefault(who,[]).append(self.clock())
+
 class ControlPlaneServer(ThreadingHTTPServer):
     def __init__(self,*args,**kwargs):
         self.stopping=threading.Event()
@@ -64,6 +79,8 @@ class API(BaseHTTPRequestHandler):
         token=raw[7:] if raw.startswith('Bearer ') else ''
         for key,actor in self.server.tokens.items():
             if secrets.compare_digest(token.encode(),key.encode()): return actor
+        actor=self.server.store.agent_actor(token)
+        if actor: return actor
         raise Problem('authentication required',401)
     def body(self):
         size=int(self.headers.get('Content-Length','0'))
@@ -117,7 +134,20 @@ class API(BaseHTTPRequestHandler):
                 if path not in names: raise Problem('not found',404)
                 f=self.server.web/names[path]; mime={'html':'text/html','js':'application/javascript','css':'text/css','svg':'image/svg+xml','png':'image/png'}[f.suffix[1:]]
                 return self.send(200,f.read_bytes(),mime)
+            if write and path=='/api/enroll':
+                # Unauthenticated by design: the single-use join code is the credential. Failures are rate-limited per client address.
+                limiter=self.server.enroll_limiter; who=self.client_address[0]
+                if limiter.blocked(who): raise Problem('too many attempts; try again later',429)
+                b=self.body()
+                try: token=self.server.store.enroll(b.get('code'),b.get('node'),b.get('attestKey'))
+                except Problem as e:
+                    if e.status in (403,409): limiter.fail(who)
+                    raise
+                return self.send(201,{'token':token,'node':b['node']})
             actor=self.actor(); role=actor['role']; store=self.server.store
+            if not write and path=='/api/enroll/tokens':
+                if role!='admin': raise Problem('forbidden',403)
+                return self.send(200,store.list_joins())
             if not write and path=='/api/state':
                 if role=='agent': raise Problem('forbidden',403)
                 if role=='admin': store.sample()
@@ -188,6 +218,15 @@ class API(BaseHTTPRequestHandler):
             elif path=='/api/models/onboard':
                 if role!='admin': raise Problem('forbidden',403)
                 return self.send(201,{'job':store.onboard(b.pop('tenant','default'),b)})
+            elif path=='/api/enroll/tokens':
+                if role!='admin': raise Problem('forbidden',403)
+                return self.send(201,store.create_join(b.get('node'),b.get('ttl',900)))
+            elif path=='/api/enroll/revoke':
+                if role!='admin': raise Problem('forbidden',403)
+                store.revoke_join(b['id'])
+            elif path=='/api/nodes/token/revoke':
+                if role!='admin': raise Problem('forbidden',403)
+                store.revoke_agent(b['id'])
             elif path=='/api/nodes/rekey':
                 if role!='admin': raise Problem('forbidden',403)
                 store.reset_key(b['id'])
@@ -253,7 +292,7 @@ class API(BaseHTTPRequestHandler):
         except Exception: self.send(500,{'error':'internal error'})
 
 def make_server(store,tokens,host='127.0.0.1',port=8443):
-    server=ControlPlaneServer((host,port),API); server.store=store; server.tokens=tokens
+    server=ControlPlaneServer((host,port),API); server.store=store; server.tokens=tokens; server.enroll_limiter=FailureLimiter()
     server.web=Path(__file__).resolve().parents[1]/'web'; server.relay=AgentRelay(store); server.gateway=Gateway(relay=server.relay); return server
 
 def main():

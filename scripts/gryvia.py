@@ -175,7 +175,7 @@ except OSError:
     pass
 LICENSE_LINE = "Gryvia Apple " + VERSION + " · BUSL-1.1 · Copyright © 2026 Zyvor AI Labs Private Limited"
 ZSH_COMPLETION = """#compdef gryvia.py gryvia
-_arguments '--server=[server origin]' '--json[raw JSON output]' '--output=[table|json|csv]' '1:command:(fit stage status top nodes policy jobs models provenance rekey fuse datasets dataset-add train sweep sweep-status sweep-cancel metrics-run deploy undeploy onboard bench eval results submit cancel priority logs drain tenant metrics quickstart doctor completion)'
+_arguments '--server=[server origin]' '--json[raw JSON output]' '--output=[table|json|csv]' '1:command:(fit stage status top nodes policy jobs models provenance rekey enroll revoke-node fuse datasets dataset-add train sweep sweep-status sweep-cancel metrics-run deploy undeploy onboard bench eval results submit cancel priority logs drain tenant metrics quickstart doctor completion)'
 """
 
 
@@ -270,6 +270,11 @@ def build_parser():
     s = sub.add_parser("deploy", help="serve a ready model on its producing Mac or a staged copy; repeat --node for one replica per Mac"); s.add_argument("model"); s.add_argument("--node", action="append", help="Mac to serve on (repeatable, at most 8; each needs the artifact, see `stage`)")
     s = sub.add_parser("undeploy", help="stop a deployment"); s.add_argument("model")
     s = sub.add_parser("provenance", help="show the signed provenance chain of a model"); s.add_argument("model")
+    s = sub.add_parser("enroll", help="add a Mac: create, list or revoke single-use join codes")
+    es = s.add_subparsers(dest="enroll_op", required=True)
+    e = es.add_parser("create", help="print a join code to run on the new Mac"); e.add_argument("--node", help="bind the code to this node id"); e.add_argument("--ttl", type=int, default=900, help="seconds the code stays valid (60..86400)")
+    es.add_parser("list"); e = es.add_parser("revoke"); e.add_argument("id")
+    s = sub.add_parser("revoke-node", help="invalidate the enrolled agent token of a Mac"); s.add_argument("node")
     s = sub.add_parser("rekey", help="forget a Mac's pinned signing key (after reinstalling the agent)"); s.add_argument("node")
     s = sub.add_parser("results", help="show benchmark/eval/download history"); s.add_argument("--model"); s.add_argument("--kind")
     sub.add_parser("quickstart", help="what to do next, based on your fleet's state")
@@ -467,6 +472,19 @@ def run(args) -> int:
             head = f"{m['id']}: " + ("verified chain" if prov["chainVerified"] else "signed, base unattested" if prov["verified"] else "UNVERIFIED")
             return head + "\n" + table(["STEP", "SIGNATURE", "SIGNER", "WHEN", "NOTE"], rows, 1)
         emit(prov or {}, args, pretty)
+        return 0
+    if args.op == "enroll":
+        if args.enroll_op == "create":
+            j = c.call("enroll/tokens", {k: v for k, v in (("node", args.node), ("ttl", args.ttl)) if v is not None})
+            emit(j, args, lambda j: f"join code {j['code']} (valid {args.ttl // 60} min, single use"
+                 + (f", node {j['node']}" if j.get("node") else "") + ")\n  on the new Mac: gryvia-agent --join " + c.base + " --code " + j["code"])
+        elif args.enroll_op == "list":
+            emit(c.call("enroll/tokens"), args, lambda rows: table(["ID", "NODE", "STATE", "EXPIRES"], [(r["id"], r["node"] or "any", r["state"], time.strftime("%m-%d %H:%M", time.localtime(r["expires"]))) for r in rows], 1))
+        else:
+            emit(c.call("enroll/revoke", {"id": args.id}), args, lambda _: f"join code {args.id} revoked")
+        return 0
+    if args.op == "revoke-node":
+        emit(c.call("nodes/token/revoke", {"id": args.node}), args, lambda _: f"agent token for {args.node} revoked; re-enrol with `gryvia enroll create --node {args.node}`")
         return 0
     if args.op == "rekey":
         emit(c.call("nodes/rekey", {"id": args.node}), args, lambda _: f"pinned key for {args.node} cleared; the next heartbeat pins the new one")

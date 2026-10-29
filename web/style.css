@@ -364,3 +364,6 @@ tr.best td { background: color-mix(in srgb, var(--status-succeeded) 8%, transpar
 :root[data-theme="dark"] .panel,:root[data-theme="dark"] .metric,:root[data-theme="dark"] .node-card,:root[data-theme="dark"] .gpu-card,:root[data-theme="dark"] .live-big {background: rgba(255,255,255,.055); border-color: rgba(255,255,255,.11); box-shadow: 0 0 0 1px rgba(255,255,255,.02) inset, 0 12px 40px rgba(0,0,0,.35); }
 :root[data-theme="dark"] .eyebrow,:root[data-theme="dark"] .hero .eyebrow {font-family: var(--font-mono); letter-spacing: .14em; text-transform: uppercase; font-size: 11px; font-weight: 600; }
 :root[data-theme="dark"] .btn.primary,:root[data-theme="dark"] button.primary {box-shadow: 0 0 22px color-mix(in srgb, var(--accent-color) 45%, transparent); }
+
+.mono{font-family:var(--font-mono)}
+pre.mono{overflow-x:auto;white-space:pre-wrap;word-break:break-all;margin:8px 0 0}

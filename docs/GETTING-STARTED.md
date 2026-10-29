@@ -52,7 +52,16 @@ Add `"stream": true` for server-sent events. The model server listens on the wor
 
 ## 4. Serve from several Macs (v0.4)
 
-Enrol a second Mac (`make deploy MINI=your-mac` installs the agent over ssh), copy the model to it with `stage`, then deploy one replica per Mac:
+Enrol a second Mac with a single-use join code (no config edit or server restart):
+
+```bash
+gryvia enroll create --node mini-02          # prints a code such as K7M2P-9XQ4R; valid 15 minutes, one use
+# on the new Mac:
+python3 scripts/install-agent.py --binary /path/to/gryvia-agent --config agent.json \
+  --join https://your-control-plane:8443 --code K7M2P-9XQ4R --node mini-02
+```
+
+The same code can be created from **Mac fleet → Add a Mac** in the web dashboard. The server stores only hashes of codes and tokens; a bad code is rate-limited (8 failures per 5 minutes per address); `gryvia revoke-node mini-02` invalidates a Mac's token. Static tokens in `config.json` keep working. Over plain HTTP only loopback is accepted, so use HTTPS for a remote control plane. The older route (`make deploy MINI=your-mac` over ssh) still works. Then copy the model to it with `stage`, then deploy one replica per Mac:
 
 ```bash
 gryvia stage model my-llama --node mini-02 --path /Users/me/models/Llama-3.2-1B-Instruct-Q4_K_M.gguf

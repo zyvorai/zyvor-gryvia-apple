@@ -169,7 +169,11 @@ gryvia.py drain MAC_ID               # stop new work on a Mac</pre>
     <section class="panel"><h3>Recent workloads</h3><div id="recent"></div></section>
   </section>
 
-  <section id="fleet" class="view hidden"><div class="section-head"><h2>Mac fleet</h2><span>Drain nodes safely before maintenance</span></div><div id="nodes" class="node-grid"></div></section>
+  <section id="fleet" class="view hidden"><div class="section-head"><h2>Mac fleet</h2><span>Drain nodes safely before maintenance</span></div><section id="add-mac" class="panel"><h3>Add a Mac</h3>
+      <p class="muted">Create a single-use code, then run the command on the new Mac. The code expires in 15 minutes and is shown only once.</p>
+      <div class="actions"><button id="join-create" class="primary">Create join code</button></div>
+      <div id="join-result" aria-live="polite"></div><div id="join-list"></div></section>
+    <div id="nodes" class="node-grid"></div></section>
 
   <section id="jobs" class="view hidden">
     <div class="section-head"><h2>Workloads</h2>
