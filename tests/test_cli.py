@@ -40,6 +40,14 @@ class CliTests(unittest.TestCase):
         self.assertEqual(self.run_cli("enroll", "revoke", j["id"])[0], 0)
         self.assertEqual(json.loads(self.run_cli("enroll", "list")[1]), [])
 
+    def test_backup_command(self):
+        code, _, err = self.run_cli("backup")
+        self.assertNotEqual(code, 0)           # no backup directory configured on this server
+        self.srv.backup_dir = self.tmp.name + "/backups"
+        code, out, _ = self.run_cli("backup", "--keep", "2")
+        self.assertEqual(code, 0)
+        self.assertTrue(json.loads(out)["file"].startswith("gryvia-"))
+
     def test_status_json_when_piped(self):
         code, out, _ = self.run_cli("status")
         self.assertEqual(code, 0)

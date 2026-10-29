@@ -17,8 +17,9 @@ struct Config: Decodable {
 }
 @main struct Agent {
     nonisolated(unsafe) static var attestor: Attestor?
-    static func heartbeat(_ config:Config) -> sending [String:Any] {
+    static func heartbeat(_ config:Config,active:[String]=[]) -> sending [String:Any] {
         var body=Hardware.report(budget:config.budgetGiB,runtimes:Array(config.runtimes.keys))
+        body["activeJobs"]=active   // lets the control plane release a job this Mac no longer holds (e.g. after an agent restart)
         if let key=attestor?.publicKeyHex { body["attestKey"]=key }
         return body
     }
@@ -72,7 +73,7 @@ struct Config: Decodable {
             while p.isRunning {
                 try await Task.sleep(nanoseconds:2_000_000_000)
                 let renew=try JSONDecoder().decode(Renewal.self,from:await api.request("api/agent/renew",body:["id":job.id,"lease":job.lease]))
-                _=try await api.request("api/agent/heartbeat",body:heartbeat(config))
+                _=try await api.request("api/agent/heartbeat",body:heartbeat(config,active:[job.id]))
                 let lines=sink.take(); note(lines)
                 if !lines.isEmpty { _=try await api.request("api/agent/logs",body:["id":job.id,"lease":job.lease,"lines":lines]) }
                 if renew.cancel || Date().timeIntervalSince(started)>Double(job.spec.timeoutSeconds) {

@@ -175,7 +175,7 @@ except OSError:
     pass
 LICENSE_LINE = "Gryvia Apple " + VERSION + " · BUSL-1.1 · Copyright © 2026 Zyvor AI Labs Private Limited"
 ZSH_COMPLETION = """#compdef gryvia.py gryvia
-_arguments '--server=[server origin]' '--json[raw JSON output]' '--output=[table|json|csv]' '1:command:(fit stage status top nodes policy jobs models provenance rekey enroll revoke-node fuse datasets dataset-add train sweep sweep-status sweep-cancel metrics-run deploy undeploy onboard bench eval results submit cancel priority logs drain tenant metrics quickstart doctor completion)'
+_arguments '--server=[server origin]' '--json[raw JSON output]' '--output=[table|json|csv]' '1:command:(fit stage status top nodes policy jobs models provenance rekey enroll backup revoke-node fuse datasets dataset-add train sweep sweep-status sweep-cancel metrics-run deploy undeploy onboard bench eval results submit cancel priority logs drain tenant metrics quickstart doctor completion)'
 """
 
 
@@ -274,6 +274,7 @@ def build_parser():
     es = s.add_subparsers(dest="enroll_op", required=True)
     e = es.add_parser("create", help="print a join code to run on the new Mac"); e.add_argument("--node", help="bind the code to this node id"); e.add_argument("--ttl", type=int, default=900, help="seconds the code stays valid (60..86400)")
     es.add_parser("list"); e = es.add_parser("revoke"); e.add_argument("id")
+    s = sub.add_parser("backup", help="write a consistent snapshot of the control-plane database on the server"); s.add_argument("--keep", type=int, default=7, help="newest snapshots to keep (1..100)")
     s = sub.add_parser("revoke-node", help="invalidate the enrolled agent token of a Mac"); s.add_argument("node")
     s = sub.add_parser("rekey", help="forget a Mac's pinned signing key (after reinstalling the agent)"); s.add_argument("node")
     s = sub.add_parser("results", help="show benchmark/eval/download history"); s.add_argument("--model"); s.add_argument("--kind")
@@ -482,6 +483,9 @@ def run(args) -> int:
             emit(c.call("enroll/tokens"), args, lambda rows: table(["ID", "NODE", "STATE", "EXPIRES"], [(r["id"], r["node"] or "any", r["state"], time.strftime("%m-%d %H:%M", time.localtime(r["expires"]))) for r in rows], 1))
         else:
             emit(c.call("enroll/revoke", {"id": args.id}), args, lambda _: f"join code {args.id} revoked")
+        return 0
+    if args.op == "backup":
+        emit(c.call("backup", {"keep": args.keep}), args, lambda r: f"backup {r['file']} ({r['bytes']:,} bytes, sha256 {r['sha256'][:12]}…); {r['kept']} kept, {r['pruned']} pruned\n  stored on the server Mac; copy it off that Mac for real protection")
         return 0
     if args.op == "revoke-node":
         emit(c.call("nodes/token/revoke", {"id": args.node}), args, lambda _: f"agent token for {args.node} revoked; re-enrol with `gryvia enroll create --node {args.node}`")

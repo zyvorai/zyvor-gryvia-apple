@@ -245,6 +245,10 @@ class API(BaseHTTPRequestHandler):
             elif path=='/api/models/onboard':
                 if role!='admin': raise Problem('forbidden',403)
                 return self.send(201,{'job':store.onboard(b.pop('tenant','default'),b)})
+            elif path=='/api/backup':
+                if role!='admin': raise Problem('forbidden',403)
+                if not self.server.backup_dir: raise Problem('backups are not configured',409)
+                return self.send(201,store.backup(self.server.backup_dir,b.get('keep',7)))
             elif path=='/api/enroll/tokens':
                 if role!='admin': raise Problem('forbidden',403)
                 return self.send(201,store.create_join(b.get('node'),b.get('ttl',900)))
@@ -319,7 +323,7 @@ class API(BaseHTTPRequestHandler):
         except Exception: self.send(500,{'error':'internal error'})
 
 def make_server(store,tokens,host='127.0.0.1',port=8443):
-    server=ControlPlaneServer((host,port),API); server.store=store; server.tokens=tokens; server.enroll_limiter=FailureLimiter()
+    server=ControlPlaneServer((host,port),API); server.store=store; server.tokens=tokens; server.enroll_limiter=FailureLimiter(); server.backup_dir=None
     server.web=Path(__file__).resolve().parents[1]/'web'; server.relay=AgentRelay(store); server.gateway=Gateway(relay=server.relay); return server
 
 def main():
@@ -332,6 +336,7 @@ def main():
         if actor['role']=='agent' and not actor.get('node'): p.error('node required')
     if a.host not in ['127.0.0.1','localhost','::1'] and not (a.cert and a.key): p.error('remote bind requires --cert and --key')
     server=make_server(Store(a.db),tokens,a.host,a.port)
+    server.backup_dir=config.get('backupDir') or str(Path(a.db).resolve().parent/'backups')
     server.store.require_verified=a.require_verified or bool(config.get('requireVerified',False))
     server.store.require_verified_chain=bool(config.get('requireVerifiedChain',False))
     server.gateway=Gateway(config.get("inferenceOrigins",[]),config.get("inferenceConcurrencyPerTenant",2),relay=server.relay,allow_loopback=a.inference_loopback or bool(config.get("inferenceAllowLoopback",False)))
