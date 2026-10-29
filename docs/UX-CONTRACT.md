@@ -18,6 +18,12 @@ All colours come from `brand/tokens.json` → `web/tokens.css` and `GryviaCore/B
 ## Layout
 Sidebar: **Get started**; **Monitor** (Live, Overview, Mac fleet, Timeline); **Build** (Model hub, Datasets, Training, Playground); **Run** (Workloads, Workflows, Deployments); **Govern** (Tenants, Alerts, Activity, Settings). Mac fleet holds **Add a Mac** (single-use join codes). Job logs stream live (SSE, polling fallback). Workloads sort by priority, memory or state; Mac fleet, Model hub, Datasets and Activity have filters. Desktop notifications are opt-in (Settings), fire only while the tab is hidden, and never contain tokens. Breakpoints 1100px and 767px; no horizontal scroll at 390px.
 
+## Inline styles and the CSP
+The control plane serves `style-src 'self'`, so the browser ignores `style="…"` in markup the dashboard injects. Templates write `data-style="…"` instead and `web/app.js` applies it through the CSSOM (allowed by that policy). `tests/test_web.py` fails if a template uses `style="`, and the browser suites fail on any CSP violation in the console.
+
+## Mac fleet cards
+Each card shows a role (Serving, Training, Benchmarking, Running, Idle, Draining, Drained, Offline) derived from the jobs the Mac holds, a capacity bar, and the slot count. The bar's coloured segments are admission **reservations** (bookkeeping, not measured use); the dark marker is the GPU memory this agent has allocated; GPU busy is for the **whole device**, not only Gryvia jobs.
+
 ## Author checklist
 Checked automatically (`tests/a11y.cjs`, run by `scripts/browser-test.sh` and CI): every view at 1440 px and 390 px, light and dark, has no horizontal page scroll and no axe-core WCAG 2.x A/AA violation. Not checked automatically: AAA, keyboard-order, screen-reader output, non-default accent colours, the SwiftUI app.
 

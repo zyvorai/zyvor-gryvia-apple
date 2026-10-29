@@ -371,3 +371,6 @@ pre.mono{overflow-x:auto;white-space:pre-wrap;word-break:break-all;margin:8px 0 
 /* tables rendered into these containers scroll inside them instead of widening the page on phones */
 #dataset-list, #events, #train-runs, #tenant-list, #join-list, #idle-list, #sweep-results { overflow-x: auto; }
 .remember.wrap { white-space: normal; align-items: flex-start; }
+.head-badges { display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.badge.role { text-transform: capitalize; }
+.node-card .legend { font-size: 11.5px; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; }
