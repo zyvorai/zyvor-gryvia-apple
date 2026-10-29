@@ -421,3 +421,33 @@ class StateStreamShutdownScenario(unittest.TestCase):
             server.shutdown(); server.server_close(); thread.join()
             self.assertTrue(server.stopping.is_set())
             response.read(); response.close(); store.db.close()
+
+
+class ReconcileTests(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        from server.core import Store
+        self.temp=tempfile.TemporaryDirectory(); self.now=1000.; self.store=Store(self.temp.name+'/db',lambda:self.now)
+        self.store.register('mini',dict(budgetGiB=16,slots=1,runtimes=['demo']))
+    def tearDown(self): self.store.db.close(); self.temp.cleanup()
+    def state(self,job): return next(j for j in self.store.snapshot()['jobs'] if j['id']==job)
+    def running(self,**kw):
+        job=self.store.submit('default',dict(runtime='demo',memoryGiB=4,**kw)); self.assertEqual(self.store.claim('mini')['id'],job); return job
+    def beat(self,**kw): self.store.register('mini',dict(budgetGiB=16,slots=1,runtimes=['demo'],**kw))
+    def test_agent_that_lost_the_job_releases_it_after_the_grace_period(self):
+        job=self.running(retries=1); self.now+=11; self.beat(activeJobs=[])
+        s=self.state(job); self.assertEqual(s['state'],'queued'); self.assertIn('lease expired',s['reason'])
+    def test_no_release_within_grace_or_when_still_held_or_when_field_absent(self):
+        job=self.running(); self.now+=5; self.beat(activeJobs=[]); self.assertEqual(self.state(job)['state'],'running')       # claim reply may be in flight
+        self.now+=6; self.beat(activeJobs=[job]); self.assertEqual(self.state(job)['state'],'running')                      # agent holds it
+        self.beat(); self.assertEqual(self.state(job)['state'],'running')                                                    # older agent: no field, no reconcile
+    def test_without_retries_the_job_fails_and_capacity_returns(self):
+        job=self.running(); self.now+=11; self.beat(activeJobs=[]); self.assertEqual(self.state(job)['state'],'failed')
+        self.assertTrue(self.store.submit('default',dict(runtime='demo',memoryGiB=16)) and self.store.claim('mini'))
+    def test_other_nodes_jobs_are_untouched_and_field_is_validated(self):
+        from server.core import Problem
+        self.store.register('studio',dict(budgetGiB=16,slots=1,runtimes=['demo'])); job=self.running(node='mini'); self.now+=11
+        self.store.register('studio',dict(budgetGiB=16,slots=1,runtimes=['demo'],activeJobs=[])); self.assertEqual(self.state(job)['state'],'running')
+        for bad in ('x',[1],['a']*65): 
+            with self.assertRaises(Problem): self.beat(activeJobs=bad)
+        self.assertNotIn('activeJobs',self.store.snapshot()['nodes'][0])

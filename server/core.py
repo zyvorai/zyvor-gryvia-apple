@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BUSL-1.1
 # Copyright © 2026 Zyvor AI Labs Private Limited
 """Durable admission scheduler. All decisions and reservations share one SQLite transaction."""
-import hashlib, json, re, secrets, sqlite3, time, uuid, threading, math
+import hashlib, json, os, re, secrets, sqlite3, time, uuid, threading, math
 from server import ed25519
 
 RUNTIMES=['demo','mlx','llama','mps','coreml','download','bench','evaluate','quantize','train','serve','fuse']
@@ -95,6 +95,34 @@ class Store:
         if 'watts' not in [r['name'] for r in self.db.execute('PRAGMA table_info(node_telemetry)')]: self.db.execute('ALTER TABLE node_telemetry ADD COLUMN watts REAL')
         if 'joules' not in [r['name'] for r in self.db.execute('PRAGMA table_info(usage)')]: self.db.execute('ALTER TABLE usage ADD COLUMN joules REAL DEFAULT 0')
         self.db.execute('INSERT OR IGNORE INTO tenants(id,quota,weight) VALUES(?,?,?)',('default',32,1))
+    BACKUP_NAME=re.compile(r'^gryvia-\d{8}-\d{6}(-\d+)?\.db$')
+    def backup(self,directory,keep=7):
+        """Consistent snapshot of the whole database (SQLite VACUUM INTO) into `directory`, which the operator chose
+        at startup; callers never pass a path. Files are 0600 in a 0700 directory, written then renamed, and only the newest `keep` are kept."""
+        if type(keep) is not int or not 1<=keep<=100: raise Problem('keep must be 1..100')
+        directory=os.path.abspath(directory); os.makedirs(directory,mode=0o700,exist_ok=True); os.chmod(directory,0o700)
+        stamp=time.strftime('%Y%m%d-%H%M%S',time.gmtime(self.clock())); name='gryvia-%s.db'%stamp
+        same=[f for f in os.listdir(directory) if f.startswith('gryvia-%s'%stamp) and self.BACKUP_NAME.match(f)]
+        if same: name='gryvia-%s-%d.db'%(stamp,1+max(int(f[:-3].split('-')[3]) if f.count('-')>2 else 0 for f in same))   # monotonic, so pruning never frees a name for reuse
+        final=os.path.join(directory,name); tmp=final+'.part'
+        try:
+            with self.lock: self.db.execute('VACUUM INTO ?',(tmp,))      # consistent, compact, single file (no WAL sidecars)
+            os.chmod(tmp,0o600)          # the 0700 directory already keeps other users out until this runs
+            dest=sqlite3.connect('file:%s?mode=ro'%tmp,uri=True)
+            try: ok=dest.execute('PRAGMA integrity_check').fetchone()[0]
+            finally: dest.close()
+        except sqlite3.Error as e:
+            os.path.exists(tmp) and os.unlink(tmp); raise Problem('backup failed: '+str(e),500)
+        if ok!='ok': os.unlink(tmp); raise Problem('backup failed its integrity check',500)
+        os.replace(tmp,final); h=hashlib.sha256()
+        with open(final,'rb') as f:
+            for chunk in iter(lambda:f.read(1<<20),b''): h.update(chunk)
+        def age(f): stem=f[7:-3].split('-'); return (stem[0],stem[1],int(stem[2]) if len(stem)>2 else 0)   # plain string order puts '-1' before the bare name
+        old=sorted((f for f in os.listdir(directory) if self.BACKUP_NAME.match(f)),key=age)[:-keep]
+        for f in old: os.unlink(os.path.join(directory,f))
+        with self.lock: self.event('backup.created','*',name)
+        kept=len([f for f in os.listdir(directory) if self.BACKUP_NAME.match(f)])
+        return {'file':name,'bytes':os.path.getsize(final),'sha256':h.hexdigest(),'kept':kept,'pruned':len(old)}
     def tx(self, fn):
         with self.lock:
             self.db.execute('BEGIN IMMEDIATE')
@@ -147,7 +175,10 @@ class Store:
                     raise Problem('invalid '+field)
         if body.get('pressure','unknown') not in ('normal','warning','critical','unknown'): raise Problem('invalid pressure')
         body['slots']=slots
+        active=body.pop('activeJobs',None)       # optional: the job ids this agent is executing right now; absent from older agents
+        if active is not None and (not isinstance(active,list) or len(active)>64 or not all(isinstance(x,str) and len(x)<=64 for x in active)): raise Problem('invalid activeJobs')
         def run():
+            if active is not None: self.reconcile(ident,set(active))
             self.db.execute('INSERT INTO nodes(id,body,seen) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body,seen=excluded.seen',(ident,json.dumps(body),self.clock()))
             self.record_telemetry(ident,body)
             self.pin_key(ident,body.get('attestKey'))
@@ -157,6 +188,17 @@ class Store:
                     self.db.execute("UPDATE jobs SET state='cancelling',reason='critical memory pressure' WHERE id=?",(job['id'],))
                     self.decide(job['id'],ident,'cancel','critical memory pressure')
         self.tx(run)
+    RECONCILE_GRACE=10   # seconds after a claim during which an agent's job list is not trusted (the claim reply may still be in flight)
+    def reconcile(self,node,active):
+        """The agent says which jobs it is running. A job the server assigned to this node that the agent no longer holds
+        (agent restarted or crashed) is released now through the normal lease-expiry path instead of after the lease runs out.
+        This frees bookkeeping only; it does not prove any process has stopped."""
+        now=self.clock(); lost=[r['id'] for r in self.db.execute("SELECT id,started FROM jobs WHERE node=? AND state IN ('running','cancelling')",(node,))
+                              if r['id'] not in active and now-(r['started'] or now)>=self.RECONCILE_GRACE]
+        if not lost: return
+        for ident in lost:
+            self.db.execute('UPDATE jobs SET expires=? WHERE id=?',(now,ident)); self.event('job.orphaned',ident,'agent on %s no longer reports this job'%node)
+        self.expire()
     def pin_key(self,node,key):
         """Trust-on-first-use pinning of a node's attestation public key; a different key later is refused and logged."""
         if not isinstance(key,str) or len(key)!=64: return

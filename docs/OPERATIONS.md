@@ -22,7 +22,17 @@ Do not sleep your Mac workers during active jobs. Before restarting a worker, dr
 
 SQLite stores up to 2,000 log entries per job. The Swift agent buffers at most 500 pending lines and sends bounded batches; high-volume output is bounded with an explicit overflow marker. Unsent batch tails are retained; individual lines are limited to 2,000 Unicode scalars. Do not put secrets in prompts or runtime output. Events, jobs and metering history are not automatically pruned in this release. Plan retention and backup policy before long-lived deployment.
 
-Stop the server before copying its database, or use SQLite's backup API. Preserve the database and its permissions on restart. Do not remove a live WAL file. Restored reservations expire through the normal lease logic.
+### Backup and restore
+
+`gryvia backup [--keep N]` (admin) asks the server to write a consistent snapshot of the whole database (`VACUUM INTO`, so one self-contained file) into `backupDir` from `config.json`, default `backups/` next to the database. Files are `gryvia-YYYYmmdd-HHMMSS[-N].db`, mode 0600 in a 0700 folder, integrity-checked when written, newest N kept (default 7, at most 100). The client cannot choose a path. Only files matching that name pattern are ever pruned.
+
+The snapshot holds job specs and logs, hashed enrolment and agent tokens, and pinned node keys, but not `config.json` tokens. It lives on the control-plane Mac, so it does not protect against losing that Mac: copy it elsewhere on a schedule, for example a launchd job running `gryvia backup` then `rsync`.
+
+To restore: stop the server, delete the live `gryvia.db`, `gryvia.db-wal` and `gryvia.db-shm`, copy the chosen snapshot to `gryvia.db`, start the server. Reservations from before the snapshot expire through the normal lease logic; agents re-register on their next heartbeat. Restoring has been tried only by opening a snapshot as a store in the tests, not on a full running fleet. Otherwise: stop the server before copying its database, preserve its permissions, and never remove a live WAL file.
+
+### Lost jobs after an agent restart
+
+Agents report the job ids they are executing in each heartbeat. If the server believes a Mac is running a job that the Mac no longer reports (and the claim is more than 10 seconds old), it releases the job through the normal lease-expiry path at once instead of after the lease runs out: retried if retries remain, otherwise failed. This frees bookkeeping only. It does not prove the old process has stopped; check the Mac before assuming the GPU is free. Agents older than this change send no list and are not reconciled.
 
 ## Inference replicas
 
