@@ -81,3 +81,24 @@ class EnrollHttpTests(unittest.TestCase):
         with self.assertRaises(SystemExit): enrollment.redeem('http://example.com','X','a')
         with self.assertRaises(SystemExit): enrollment.redeem(self.base,'X','bad id')
 if __name__=='__main__': unittest.main()
+
+
+class ConcurrencyTests(unittest.TestCase):
+    """The server shares one SQLite connection between handler threads, so every database access must hold store.lock.
+    Agent authentication reads the token table on each request; this once raced with heartbeats ('database table is locked')."""
+    def test_agent_auth_does_not_race_with_heartbeats(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            store=Store(d+'/db'); token=store.enroll(store.create_join()['code'],'mini'); errors=[]; stop=threading.Event()
+            def auth():
+                while not stop.is_set():
+                    try: assert store.agent_actor(token)['node']=='mini'
+                    except Exception as e: errors.append(repr(e)); return
+            def beat():
+                for _ in range(400):
+                    try: store.register('mini',dict(budgetGiB=8,runtimes=['demo']))
+                    except Exception as e: errors.append(repr(e)); return
+            readers=[threading.Thread(target=auth) for _ in range(4)]; writer=threading.Thread(target=beat)
+            [t.start() for t in readers]; writer.start(); writer.join(); stop.set(); [t.join() for t in readers]
+            store.db.close()
+            self.assertEqual(errors,[])

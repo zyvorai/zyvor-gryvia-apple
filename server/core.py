@@ -257,7 +257,8 @@ class Store:
         self.tx(run); return token
     def agent_actor(self,token):
         if not token: return None
-        row=self.db.execute('SELECT node FROM agent_tokens WHERE hash=?',(self._digest(token),)).fetchone()
+        with self.lock:      # one SQLite connection is shared by all handler threads: every access must hold the lock
+            row=self.db.execute('SELECT node FROM agent_tokens WHERE hash=?',(self._digest(token),)).fetchone()
         return {'role':'agent','node':row['node']} if row else None
     def revoke_agent(self,node):
         def run():

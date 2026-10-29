@@ -9,6 +9,7 @@
 | Native logic | `cd native && swift test` | Xcode / Swift 6 |
 | Everything above except web | `make verify` | macOS |
 | Agent → API → subprocess → logs → completion | `bash scripts/mac-smoke.sh` | macOS, port 8443 free |
+| Two real agents, join-code enrolment, kill and restart one mid-job | `python3 scripts/multi-agent-smoke.py` | macOS, `swift build --product gryvia-agent` first; two processes on one Mac, not two Macs; not run by CI |
 | Package | `scripts/package-mac.sh $(cat VERSION)` | macOS |
 
 ## On real hardware
