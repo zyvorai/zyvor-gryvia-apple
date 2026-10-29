@@ -243,3 +243,8 @@ Changes and usage: [docs/FLEET-RELIABILITY.md](docs/FLEET-RELIABILITY.md).
 - **Verified (dev Mac, Python 3.9, standalone run of the new test body):** `tests/test_runtimes.py::ParentLossTests` starts a throwaway parent, a wrapper using `_common.ManagedProcess` and a `/bin/sleep 300` child, `kill -9`s the parent, and checks the child is gone within 5 s. It passed in 0.17 s with no leftover process. This is the same `ManagedProcess` that `llama_serve.py` and the other bundled wrappers use.
 - **Not verified:** a real `llama-server` or MLX process (no GGUF model on this Mac); the test file itself under the project's Python 3.14 (it does not import on 3.9, CI covers it); executables an administrator configures that do not use `ManagedProcess`; a wrapper that is itself `SIGKILL`ed.
 
+
+## SwiftUI Workloads sort
+
+- **Verified (dev Mac):** `swift build` succeeds with a sort menu on the Workloads pane (Newest, Oldest, Memory, Priority, State) that has an accessibility label.
+- **Not verified:** the picker's runtime behaviour or VoiceOver reading (no UI run or snapshot taken); the CI `native` job only builds and tests.
