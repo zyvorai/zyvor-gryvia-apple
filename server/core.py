@@ -54,7 +54,7 @@ def policy_gate(policy,presence):
 
 class Store:
     def __init__(self, path, clock=time.time):
-        self.clock=clock; self.lock=threading.RLock(); self._gate_last={}; self.require_verified=False; self.require_verified_chain=False
+        self.clock=clock; self.lock=threading.RLock(); self._gate_last={}; self._defer={}; self.require_verified=False; self.require_verified_chain=False
         self.db=sqlite3.connect(path, check_same_thread=False, isolation_level=None)
         self.db.row_factory=sqlite3.Row
         self.db.executescript('''PRAGMA journal_mode=WAL;
@@ -259,6 +259,12 @@ class Store:
             if type(v) is not int or not lo<=v<=hi: raise Problem('invalid '+key)
             body[key]=v
         if 'node' in body and (not isinstance(body['node'],str) or len(body['node'])>80): raise Problem('invalid node selector')
+        avoid=body.get('avoidNodes',[])
+        if not isinstance(avoid,list) or len(avoid)>8 or not all(isinstance(x,str) and 0<len(x)<=80 for x in avoid): raise Problem('invalid avoidNodes')
+        if 'node' in body and body['node'] in avoid: raise Problem('node selector is also in avoidNodes')
+        if 'minGpuCores' in body and (type(body['minGpuCores']) is not int or not 1<=body['minGpuCores']<=256): raise Problem('invalid minGpuCores')
+        if 'minBudgetGiB' in body: positive(body['minBudgetGiB'],'minBudgetGiB')
+        body['avoidNodes']=avoid
         args=body.get('args',[])
         if not isinstance(args,list) or len(args)>64 or not all(isinstance(x,str) and len(x)<=4096 for x in args): raise Problem('invalid args')
         if not isinstance(body.get('model',''),str) or len(body.get('model',''))>256: raise Problem('invalid model')
@@ -335,6 +341,9 @@ class Store:
                 if any(d['state']!='succeeded' for d in deps): reason='waiting for dependency'
                 elif b['runtime'] not in nb['runtimes']: reason='runtime unavailable'
                 elif b.get('node') and b['node']!=node: reason='node selector'
+                elif node in b.get('avoidNodes',[]): reason='node avoided by the workload'
+                elif b.get('minGpuCores') and (nb.get('gpuCores') or 0)<b['minGpuCores']: reason='needs %d GPU cores'%b['minGpuCores']
+                elif b.get('minBudgetGiB') and nb['budgetGiB']<b['minBudgetGiB']: reason='needs a node budget of %g GiB'%b['minBudgetGiB']
                 elif j['checkpoint_node'] and j['checkpoint_node']!=node: reason='training checkpoint is on '+j['checkpoint_node']
                 elif used[j['tenant']]+b['memoryGiB']>tenants[j['tenant']]['quota']: reason='tenant memory quota'
                 elif b['mode']=='exclusive' and local: reason='waiting for exclusive worker'
@@ -343,6 +352,7 @@ class Store:
                 elif 'metalWorkingSetGiB' in nb and sum(json.loads(x['body'])['memoryGiB'] for x in local)+b['memoryGiB']>nb['metalWorkingSetGiB']: reason='Metal recommended working set'
                 elif 'availableGiB' in nb and b['memoryGiB']>max(0,nb['availableGiB']-nb.get('memoryHeadroomGiB',1)): reason='live memory headroom'
                 if not reason: reason=self.artifact_gate(b,node,j['tenant'])
+                if not reason: reason=self.defer_for_faster(j,b,node,nb,active)
                 if not reason and (self.require_verified or self.require_verified_chain):
                     try: self.verify_chain(b,chain=self.require_verified_chain)
                     except Problem as error: reason=error.message
@@ -359,6 +369,33 @@ class Store:
                 return dict(id=j['id'],lease=lease,spec=spec,expires=self.clock()+20,specSha256=spec_sha)
             return None
         return self.tx(run)
+    DEFER_KINDS=('train','benchmark','evaluate','quantize','fuse','serve')
+    DEFER_POLLS=3        # a Mac yields a job to a clearly faster idle Mac for at most this many polls, so nothing can starve
+    DEFER_RATIO=1.25     # "clearly faster": more than 25% more GPU cores
+    def defer_for_faster(self,j,b,node,nb,active):
+        """Placement hint, never a guarantee: leave a GPU-bound job for a clearly faster Mac that could run it right now.
+        Bounded (DEFER_POLLS) so a stalled or flapping Mac cannot hold work back. Returns a wait reason or ''."""
+        if b.get('kind') not in self.DEFER_KINDS or b.get('node') or j['checkpoint_node']: return ''
+        mine=nb.get('gpuCores')
+        if not isinstance(mine,int) or mine<=0: return ''
+        key=(j['id'],node); now=self.clock()
+        better=None
+        for o in self.db.execute('SELECT * FROM nodes WHERE id!=?',(node,)):
+            if o['drain'] or now-o['seen']>30 or o['id'] in b.get('avoidNodes',[]): continue
+            ob=json.loads(o['body']); cores=ob.get('gpuCores')
+            if not isinstance(cores,int) or cores<=mine*self.DEFER_RATIO: continue
+            if b['runtime'] not in ob.get('runtimes',[]) or ob.get('thermal') in ('serious','critical') or ob.get('pressure') in ('warning','critical'): continue
+            if b.get('minGpuCores') and cores<b['minGpuCores'] or b.get('minBudgetGiB') and ob['budgetGiB']<b['minBudgetGiB']: continue
+            if not self.gate(o['id'],ob)[0]: continue
+            there=[x for x in active if x['node']==o['id']]
+            if len(there)>=ob['slots'] or any(json.loads(x['body'])['mode']=='exclusive' for x in there): continue
+            if sum(json.loads(x['body'])['memoryGiB'] for x in there)+b['memoryGiB']>ob['budgetGiB']: continue
+            if better is None or cores>better[1]: better=(o['id'],cores)
+        if not better: self._defer.pop(key,None); return ''
+        n=self._defer.get(key,0)
+        if n>=self.DEFER_POLLS: return ''
+        self._defer[key]=n+1
+        return 'waiting for a faster Mac (%s, %d GPU cores vs %d)'%(better[0],better[1],mine)
     def verify_chain(self,spec,chain=True):
         if spec.get('kind') not in ('serve','benchmark','evaluate','quantize','fuse'): return
         mid=spec.get('modelId')
