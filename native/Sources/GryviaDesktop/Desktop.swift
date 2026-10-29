@@ -147,15 +147,33 @@ enum Pane: String, CaseIterable, Identifiable {
     /// UserNotifications traps when the process is not inside an app bundle (e.g. `swift run`).
     static let canNotify = Bundle.main.bundleIdentifier != nil
 
+    private var knownNodes: [String: Bool] = [:]
+
+    /// Preferences live in Settings (`@AppStorage`); defaults match the old behaviour (job notifications on).
+    private static func pref(_ key: String, _ fallback: Bool) -> Bool {
+        UserDefaults.standard.object(forKey: key) as? Bool ?? fallback
+    }
+
     private func notifyTransitions(_ snap: Snapshot) {
+        let quiet = Self.pref("notifyOnlyInBackground", false) && NSApplication.shared.isActive
+        let canPost = Self.canNotify && !quiet
         for j in snap.jobs {
-            if Self.canNotify, let prev = known[j.id], prev != j.state, ["succeeded", "failed"].contains(j.state) {
+            if canPost, Self.pref("notifyJobs", true), let prev = known[j.id], prev != j.state, ["succeeded", "failed"].contains(j.state) {
                 let c = UNMutableNotificationContent()
                 c.title = j.state == "succeeded" ? "Job finished" : "Job failed"
                 c.body = (j.spec.model ?? j.spec.runtime) + " · " + String(j.id.prefix(10))
                 UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: j.id, content: c, trigger: nil))
             }
             known[j.id] = j.state
+        }
+        for n in snap.nodes {
+            if canPost, Self.pref("notifyNodes", false), knownNodes[n.id] == true, !n.online {
+                let c = UNMutableNotificationContent()
+                c.title = "Mac offline"
+                c.body = n.id
+                UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "node-" + n.id, content: c, trigger: nil))
+            }
+            knownNodes[n.id] = n.online
         }
     }
 }
@@ -1146,6 +1164,9 @@ struct SubmitSheet: View {
 struct SettingsView: View {
     @AppStorage("accent") private var accent = "blue"
     @AppStorage("refreshSeconds") private var refresh = 5
+    @AppStorage("notifyJobs") private var notifyJobs = true
+    @AppStorage("notifyNodes") private var notifyNodes = false
+    @AppStorage("notifyOnlyInBackground") private var notifyBackground = false
     var body: some View {
         Form {
             Picker("Accent", selection: $accent) {
@@ -1154,6 +1175,13 @@ struct SettingsView: View {
                 }
             }
             Picker("Refresh every", selection: $refresh) { ForEach([2, 5, 15, 60], id: \.self) { Text("\($0) s").tag($0) } }
+            Section("Notifications") {
+                Toggle("A job finishes or fails", isOn: $notifyJobs)
+                Toggle("A Mac goes offline", isOn: $notifyNodes)
+                Toggle("Only when Gryvia is in the background", isOn: $notifyBackground)
+                Text("Notifications need the app to be running and the system permission granted. They contain a job label and id, never a token.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("About") {
                 Text("Gryvia Apple 0.4.3 · Business Source License 1.1")
                 Text("Copyright © 2026 Zyvor AI Labs Private Limited").foregroundStyle(.secondary)
