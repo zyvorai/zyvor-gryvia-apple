@@ -36,7 +36,7 @@ mini-setup: ## Install MLX on the mini and enable detected runtimes in its agent
 verify: ## Full local verification (Python, JS syntax, Swift test + release build)
 	@REQUIRE_SWIFT=$$([ "$$(uname)" = Darwin ] && echo 1 || echo 0) PYTHON=$(PYTHON) bash scripts/verify.sh
 test: ## Python unit tests
-	$(PYTHON) -m unittest discover -s tests
+	GRYVIA_DEBUG_LOCKS=1 $(PYTHON) -m unittest discover -s tests
 swift-test: ## Swift unit tests
 	cd native && swift test
 build: ## Release build of agent + desktop app

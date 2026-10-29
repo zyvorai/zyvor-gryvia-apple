@@ -50,7 +50,7 @@ class IdleEvictionTests(unittest.TestCase):
         else: self.gateway.chat(self.store, 'team', body)
 
     def state(self, jid):
-        return self.store.db.execute('SELECT state FROM jobs WHERE id=?', (jid,)).fetchone()['state']
+        with self.store.lock: return self.store.db.execute('SELECT state FROM jobs WHERE id=?', (jid,)).fetchone()['state']
 
     def test_fresh_deploy_of_old_model_is_not_idle(self):
         self.store.model('m', dict(memoryGiB=4))
@@ -77,7 +77,7 @@ class IdleEvictionTests(unittest.TestCase):
         self.assertEqual(self.store.evict_idle(HOUR, 'nightly'), [quiet])
         self.assertEqual((self.state(quiet), self.state(busy)), ('cancelling', 'running'))
         self.assertEqual(self.store.evict_idle(HOUR), [])
-        events = [tuple(r) for r in self.store.db.execute("SELECT subject, detail FROM events WHERE kind='model.evict_idle'")]
+        with self.store.lock: events = [tuple(r) for r in self.store.db.execute("SELECT subject, detail FROM events WHERE kind='model.evict_idle'")]
         self.assertEqual(events, [('quiet', 'nightly ' + quiet)])
 
     def test_capacity_summary_reports_reservations_not_utilisation(self):

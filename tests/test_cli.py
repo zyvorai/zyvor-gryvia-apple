@@ -186,4 +186,5 @@ class ProvenanceCliTests(CliTests):
         self.store.register("mac", dict(budgetGiB=8, runtimes=["demo"], attestKey="ab" * 32))
         code, out, _ = self.run_cli("rekey", "mac")
         self.assertEqual(code, 0)
-        self.assertIsNone(self.store.db.execute("SELECT pub FROM node_keys WHERE node='mac'").fetchone())
+        with self.store.lock: pinned = self.store.db.execute("SELECT pub FROM node_keys WHERE node='mac'").fetchone()
+        self.assertIsNone(pinned)

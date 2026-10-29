@@ -52,6 +52,18 @@ def policy_gate(policy,presence):
         if p['pauseOnCall'] and pr.get('micInUse'): return False,'microphone in use (call?)'
     return True,''
 
+class LockCheckedConnection:
+    """Debug aid (GRYVIA_DEBUG_LOCKS=1): the server shares one SQLite connection between handler threads, so every statement
+    must run while `store.lock` is held. This wrapper raises when one does not. Off by default; used by the test suite."""
+    def __init__(self,db,lock): object.__setattr__(self,'_db',db); object.__setattr__(self,'_lock',lock)
+    def _check(self,what):
+        if not self._lock._is_owned(): raise AssertionError('SQLite %s without store.lock held'%what)
+    def execute(self,*a,**k): self._check('execute'); return self._db.execute(*a,**k)
+    def executemany(self,*a,**k): self._check('executemany'); return self._db.executemany(*a,**k)
+    def executescript(self,*a,**k): self._check('executescript'); return self._db.executescript(*a,**k)
+    def __getattr__(self,name): return getattr(self._db,name)
+    def __setattr__(self,name,value): setattr(self._db,name,value)
+
 class Store:
     def __init__(self, path, clock=time.time):
         self.clock=clock; self.lock=threading.RLock(); self._gate_last={}; self._defer={}; self.require_verified=False; self.require_verified_chain=False
@@ -95,6 +107,7 @@ class Store:
         if 'watts' not in [r['name'] for r in self.db.execute('PRAGMA table_info(node_telemetry)')]: self.db.execute('ALTER TABLE node_telemetry ADD COLUMN watts REAL')
         if 'joules' not in [r['name'] for r in self.db.execute('PRAGMA table_info(usage)')]: self.db.execute('ALTER TABLE usage ADD COLUMN joules REAL DEFAULT 0')
         self.db.execute('INSERT OR IGNORE INTO tenants(id,quota,weight) VALUES(?,?,?)',('default',32,1))
+        if os.environ.get('GRYVIA_DEBUG_LOCKS')=='1': self.db=LockCheckedConnection(self.db,self.lock)
     BACKUP_NAME=re.compile(r'^gryvia-\d{8}-\d{6}(-\d+)?\.db$')
     def backup(self,directory,keep=7):
         """Consistent snapshot of the whole database (SQLite VACUUM INTO) into `directory`, which the operator chose
@@ -266,7 +279,7 @@ class Store:
             self.event('enroll.token_revoked',node)
         self.tx(run)
     def node_policy(self,node):
-        row=self.db.execute('SELECT body FROM node_policy WHERE node=?',(node,)).fetchone()
+        with self.lock: row=self.db.execute('SELECT body FROM node_policy WHERE node=?',(node,)).fetchone()
         return json.loads(row['body']) if row else dict(DEFAULT_POLICY)
     def set_policy(self,node,raw):
         pol=clean_policy(raw)
@@ -313,7 +326,7 @@ class Store:
         if not isinstance(args,list) or len(args)>64 or not all(isinstance(x,str) and len(x)<=4096 for x in args): raise Problem('invalid args')
         if not isinstance(body.get('model',''),str) or len(body.get('model',''))>256: raise Problem('invalid model')
         if self.require_verified and body.get('kind') in ('serve','benchmark','evaluate','quantize','fuse') and body.get('modelId'):
-            row=self.db.execute('SELECT body FROM models WHERE id=?',(body['modelId'],)).fetchone()
+            with self.lock: row=self.db.execute('SELECT body FROM models WHERE id=?',(body['modelId'],)).fetchone()
             prov=(json.loads(row['body']).get('provenance') if row else None) or {}
             if not prov.get('verified'): raise Problem('policy requireVerified: model %s has no verified provenance'%body['modelId'],403)
         if self.require_verified_chain and body.get('kind') in ('serve','benchmark','evaluate','quantize','fuse'):
@@ -446,7 +459,7 @@ class Store:
     def verify_chain(self,spec,chain=True):
         if spec.get('kind') not in ('serve','benchmark','evaluate','quantize','fuse'): return
         mid=spec.get('modelId')
-        row=self.db.execute('SELECT body FROM models WHERE id=?',(mid,)).fetchone() if mid else None
+        with self.lock: row=self.db.execute('SELECT body FROM models WHERE id=?',(mid,)).fetchone() if mid else None
         prov=(json.loads(row['body']).get('provenance') if row else None) or {}
         field='chainVerified' if chain else 'verified'
         if not prov.get(field): raise Problem('policy provenance: '+str(mid or 'missing modelId')+' requires '+field,403)
@@ -836,7 +849,7 @@ class Store:
         self.tx(lambda:self.db.execute('INSERT INTO workflows VALUES(?,?,?)',(wid,json.dumps(dict(name=name,steps=steps,tenant=tenant)),self.clock())))
         return wid
     def cancel_workflow(self,wid,tenant=None):
-        row=self.db.execute('SELECT body FROM workflows WHERE id=?',(wid,)).fetchone()
+        with self.lock: row=self.db.execute('SELECT body FROM workflows WHERE id=?',(wid,)).fetchone()
         if not row: raise Problem('workflow not found',404)
         w=json.loads(row['body'])
         if tenant and tenant!=w['tenant']: raise Problem('workflow not found',404)
@@ -871,9 +884,10 @@ class Store:
         if type(iters) is not int or not 1<=iters<=5000: raise Problem('invalid iters')
         positive(body.get('memoryGiB'),'memoryGiB')
         name=str(body.get('name') or 'sweep')[:60]
-        if not self.db.execute('SELECT 1 FROM tenants WHERE id=?',(tenant,)).fetchone(): raise Problem('unknown tenant')
         mid=re.sub(r'[^A-Za-z0-9._-]+','__',base)
-        if not self.db.execute('SELECT 1 FROM models WHERE id=?',(mid,)).fetchone(): raise Problem('base model %s is not registered'%mid)
+        with self.lock:
+            if not self.db.execute('SELECT 1 FROM tenants WHERE id=?',(tenant,)).fetchone(): raise Problem('unknown tenant')
+            if not self.db.execute('SELECT 1 FROM models WHERE id=?',(mid,)).fetchone(): raise Problem('base model %s is not registered'%mid)
         combos=[{}]
         for k,vals in axes.items(): combos=[dict(c,**{k:v}) for c in combos for v in vals]
         defaults={'lr':1e-5,'layers':8,'batch':2}; runs=[]; made=[]
@@ -892,7 +906,7 @@ class Store:
             raise
         sid=uuid.uuid4().hex[:12]
         self.tx(lambda:self.db.execute('INSERT INTO sweeps VALUES(?,?,?)',(sid,json.dumps(dict(name=name,tenant=tenant,base=base,modelId=mid,datasetId=dataset,iters=iters,memoryGiB=body['memoryGiB'],grid=axes,runs=runs)),self.clock())))
-        self.event('sweep.created',sid,f'{len(runs)} runs')
+        with self.lock: self.event('sweep.created',sid,f'{len(runs)} runs')
         return sid
     def sweep_status(self,sid,tenant=None):
         """Runs ranked by final validation loss (runs without one last), best first. Loss comes from the adapter a run produced,
@@ -923,7 +937,7 @@ class Store:
             return dict(id=sid,name=w['name'],tenant=w['tenant'],base=w['base'],datasetId=w['datasetId'],iters=w['iters'],grid=w['grid'],runs=rows,best=best,
                         complete=all(x['state'] in ('succeeded','failed','cancelled') for x in rows))
     def cancel_sweep(self,sid,tenant=None):
-        row=self.db.execute('SELECT body FROM sweeps WHERE id=?',(sid,)).fetchone()
+        with self.lock: row=self.db.execute('SELECT body FROM sweeps WHERE id=?',(sid,)).fetchone()
         if not row: raise Problem('sweep not found',404)
         w=json.loads(row['body'])
         if tenant and tenant!=w['tenant']: raise Problem('sweep not found',404)
@@ -996,7 +1010,7 @@ class Store:
     def last_activity_at(self, model_id):
         """Latest gateway request (completed or streamed) or deployment for this model, or None.
         The gateway records inference events as (kind, tenant, model), so the model is in detail."""
-        row=self.db.execute("SELECT MAX(at) AS a FROM events WHERE (kind IN ('inference.completed','inference.streamed') AND detail=?) OR (kind='model.deployed' AND subject=?)",(model_id,model_id)).fetchone()
+        with self.lock: row=self.db.execute("SELECT MAX(at) AS a FROM events WHERE (kind IN ('inference.completed','inference.streamed') AND detail=?) OR (kind='model.deployed' AND subject=?)",(model_id,model_id)).fetchone()
         return row['a'] if row and row['a'] is not None else None
     def _idle_locked(self, idle_seconds):
         now=self.clock(); out=[]
