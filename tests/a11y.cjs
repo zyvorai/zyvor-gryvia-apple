@@ -7,14 +7,14 @@ const SIZES=[[1440,900,'light'],[390,844,'light'],[1440,900,'dark'],[390,844,'da
 (async()=>{const browser=await chromium.launch({headless:true});const problems=[];
 for(const [width,height,scheme] of SIZES){
   const page=await browser.newPage({viewport:{width,height},colorScheme:scheme});const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.goto('http://127.0.0.1:8765');await page.fill('#token','browser-test-admin-token-00000000');await page.click('#login button');await page.waitForSelector('#hero .num');
+  await page.goto('http://127.0.0.1:8765');await page.evaluate(()=>{const sh=new CSSStyleSheet();sh.replaceSync('*,*::before,*::after{transition:none!important;animation:none!important}');document.adoptedStyleSheets=[...document.adoptedStyleSheets,sh]});   // axe must not sample a colour mid-transitionawait page.fill('#token','browser-test-admin-token-00000000');await page.click('#login button');await page.waitForSelector('#hero .num');
   for(const view of VIEWS){
     await page.evaluate(v=>{const b=document.querySelector(`[data-view="${v}"]`);b&&b.click()},view);await page.waitForTimeout(250);
     const over=await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);
     if(over>1)problems.push(`${view} @${width}px ${scheme}: page scrolls horizontally by ${over}px`);
     await page.evaluate(axeSource);
     const res=await page.evaluate(()=>axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']},resultTypes:['violations']}));
-    for(const v of res.violations)problems.push(`${view} @${width}px ${scheme}: ${v.id} (${v.impact}) x${v.nodes.length}: ${v.nodes[0].target.join(' ')}`);
+    for(const v of res.violations){const d=(v.nodes[0].any[0]||{}).data||{};problems.push(`${view} @${width}px ${scheme}: ${v.id} (${v.impact}) x${v.nodes.length}: ${v.nodes[0].target.join(' ')}${d.fgColor?` fg ${d.fgColor} bg ${d.bgColor} ratio ${d.contrastRatio}`:''}`)}
   }
   errors.forEach(e=>problems.push('JS error: '+e));await page.close();
 }
