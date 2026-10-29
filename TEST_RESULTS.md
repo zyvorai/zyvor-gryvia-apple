@@ -269,3 +269,8 @@ Changes and usage: [docs/FLEET-RELIABILITY.md](docs/FLEET-RELIABILITY.md).
 
 - **Verified (dev Mac, loopback, LibreSSL 3.3.6 and Python 3.9):** the certificate recipe in `docs/OPERATIONS.md` produced a certificate the server loaded; a client trusting the CA got `{"status": "ok"}` from `/healthz`, a client without it got `CERTIFICATE_VERIFY_FAILED`, and a TLS 1.1-only client could not connect.
 - **Not verified:** `security add-trusted-cert`, the Swift agent or desktop app against a private-CA server, a remote address, renewal, mutual TLS (not implemented).
+
+## Lease fencing after reclaim
+
+- **Verified (dev Mac, Python 3.9, `GRYVIA_DEBUG_LOCKS=1`):** `tests/test_scheduler.py` (30 tests) including a new one: after a lease expires and the job is reclaimed on another Mac, the old worker's renew, complete and log writes, and the old lease presented from the new Mac, are all rejected, the new run keeps going and completes. Lease tokens were already unique per claim, so no code changed; the plan's "epoch fencing" item was judged unnecessary at the database level.
+- **Not verified:** the old worker's process actually stopping (a token cannot do that); behaviour across two physical Macs.

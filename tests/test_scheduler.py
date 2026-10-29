@@ -34,6 +34,19 @@ class SchedulerTests(unittest.TestCase):
         j=self.job(retries=1);c=self.store.claim('mini');self.now+=21
         with self.assertRaises(Problem):self.store.complete('mini',j,c['lease'],True,{})
         c2=self.store.claim('mini');self.assertNotEqual(c['lease'],c2['lease'])
+    def test_old_worker_cannot_touch_a_job_reclaimed_elsewhere(self):
+        # The lease is a fresh random token per claim: after expiry and reclaim on another Mac the old worker is fenced on every write.
+        self.node('other'); j=self.job(retries=1); old=self.store.claim('mini'); self.now+=21
+        new=self.store.claim('other'); self.assertEqual((new['id'],new['lease']==old['lease']),(j,False))
+        for call in (lambda: self.store.renew('mini',j,old['lease']),
+                     lambda: self.store.complete('mini',j,old['lease'],True,{}),
+                     lambda: self.store.logs('mini',j,old['lease'],['late'])):
+            with self.assertRaises(Problem): call()
+        # even presenting the old lease from the new node is refused
+        with self.assertRaises(Problem): self.store.complete('other',j,old['lease'],True,{})
+        job=next(x for x in self.store.snapshot()['jobs'] if x['id']==j)
+        self.assertEqual((job['state'],job['node']),('running','other'))
+        self.store.complete('other',j,new['lease'],True,{}); self.assertEqual(self.store.snapshot()['jobs'][0]['state'],'succeeded')
     def test_retry_exhausted(self):
         j=self.job(retries=1);c=self.store.claim('mini');self.store.complete('mini',j,c['lease'],False,{})
         c=self.store.claim('mini');self.store.complete('mini',j,c['lease'],False,{})
