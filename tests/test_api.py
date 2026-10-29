@@ -52,6 +52,23 @@ class APITests(unittest.TestCase):
         self.assertEqual(self.req('/api/agent/logs','t'*32,payload)[0],403)
         payload['lease']='stale'
         self.assertEqual(self.req('/api/agent/logs','n'*32,payload)[0],409)
+    def test_log_stream_sse(self):
+        job=self.store.submit('team',dict(runtime='demo',memoryGiB=4))
+        self.store.register('mini',dict(budgetGiB=8,runtimes=['demo']))
+        claim=self.store.claim('mini'); self.store.logs('mini',job,claim['lease'],['one','two'])
+        def get(path,token):
+            r=urllib.request.Request(self.base+path,headers={'Authorization':'Bearer '+token})
+            try: return urllib.request.urlopen(r,timeout=10)
+            except urllib.error.HTTPError as e: return e
+        self.assertEqual(get('/api/logs/'+job+'/stream','n'*32).code,403)
+        self.assertEqual(get('/api/logs/nope/stream','t'*32).code,404)
+        self.assertEqual(get('/api/logs/'+job+'/stream?after=x','t'*32).code,400)
+        self.store.complete('mini',job,claim['lease'],True,{})   # finished: the stream drains then ends
+        res=get('/api/logs/'+job+'/stream','t'*32); body=res.read().decode()
+        self.assertEqual(res.headers['Content-Type'],'text/event-stream')
+        first=json.loads(body.split('data: ',1)[1].split('\n',1)[0])
+        self.assertEqual([r['text'] for r in first],['one','two']); self.assertIn('event: end',body)
+        after=first[-1]['seq']; self.assertNotIn('"text"',get('/api/logs/'+job+'/stream?after=%d'%after,'t'*32).read().decode())
     def test_agent_log_batch_bad_fields(self):
         job=self.store.submit('default',dict(runtime='demo',memoryGiB=4))
         self.store.register('mini',dict(budgetGiB=8,runtimes=['demo']))

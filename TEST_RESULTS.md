@@ -180,3 +180,8 @@ Changes and usage: [docs/FLEET-RELIABILITY.md](docs/FLEET-RELIABILITY.md).
 
 - **Verified (unit/integration, one Mac):** `tests/test_enroll.py` covers single use, expiry, node binding, re-enrolment replacing the token, revoke, hashed storage, input validation, the rate limiter, and an enrolled token driving `/api/agent/heartbeat` but not `/api/state`. `tests/test_cli.py` covers `gryvia enroll create|list|revoke`. The Playwright suite creates and revokes a code from the Mac fleet view.
 - **Not verified:** `install-agent.py --join` against a real launchd on a second Mac; enrolment over HTTPS with a real certificate; the `python3` on this shell is 3.9, so `tests/test_runtimes` (3.10+ syntax) did not import here.
+
+## Streaming logs, notifications, filters
+
+- **Verified (one Mac):** `GET /api/logs/{id}/stream` (SSE): role checks (agent 403, unknown job 404, bad `after` 400), drain-then-`event: end` for a finished job, resume after a sequence number (`tests/test_api.py`). The Playwright suite asserts the dashboard requests the stream, filters Models/Datasets, and switches the Workloads sort, with no JS errors.
+- **Not verified:** a long-running job streamed through a real agent; browser Notification permission prompts and the tab-title badge (need a hidden tab and a real permission grant, not exercised by the suite); sort and filter on the SwiftUI app (not implemented there).

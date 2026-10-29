@@ -3,8 +3,8 @@
 | Feature | Delivered behavior | Validation |
 |---|---|---|
 | Swift native agent | Metal inventory, outbound polling, subprocess launch, lease renewal, cancellation, timeout | Built and XCTest-passed on macOS 27.2 / Swift 6.4 (MacBook and Mac mini); `mac-smoke.sh` passes on both |
-| SwiftUI desktop | Connect, fleet, drain, workloads, submission, cancellation, tenant inspection | Source included; macOS build pending |
-| Web UX | Overview, fleet, workloads, model catalog, tenant quotas, allocation metering, audit, logs, filtering | HTML contract and JS syntax pass; browser suite included, unrun here |
+| SwiftUI desktop | Connect, fleet, drain, workloads, submission, cancellation, tenant inspection | `swift build` passes on the dev Mac (see TEST_RESULTS.md); no UI tests |
+| Web UX | Overview, fleet, workloads, model catalog, tenant quotas, allocation metering, audit, logs, filtering | HTML contract and JS syntax pass; Playwright suite passes on the dev Mac (see TEST_RESULTS.md); no visual-regression, mobile-viewport or axe checks yet |
 | Durable scheduler | Priority, weighted memory fairness, quota, exclusive/shared admission, node selectors | Unit/integration tests pass |
 | Reservations | Atomic claims, capacity held through cancellation, expiry and retry fencing | Concurrency and stale-attempt tests pass |
 | Fleet health | Node heartbeat freshness, drain, thermal gate | Tests pass; actual Metal reports unverified |

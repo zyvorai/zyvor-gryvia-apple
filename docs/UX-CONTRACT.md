@@ -16,7 +16,7 @@ All colours come from `brand/tokens.json` → `web/tokens.css` and `GryviaCore/B
 `macos27` (default, flat opaque surfaces) and `glass` (translucent sidebar capsule, blur). Light/Dark/Auto. Set in Settings; applied before first paint.
 
 ## Layout
-Sidebar: **Monitor** (Overview, Mac fleet, Workloads, Timeline), **Manage** (Models, Tenants, Alerts, Activity, Settings). Breakpoints 1100px and 767px; no horizontal scroll at 390px.
+Sidebar: **Get started**; **Monitor** (Live, Overview, Mac fleet, Timeline); **Build** (Model hub, Datasets, Training, Playground); **Run** (Workloads, Workflows, Deployments); **Govern** (Tenants, Alerts, Activity, Settings). Mac fleet holds **Add a Mac** (single-use join codes). Job logs stream live (SSE, polling fallback). Workloads sort by priority, memory or state; Mac fleet, Model hub, Datasets and Activity have filters. Desktop notifications are opt-in (Settings), fire only while the tab is hidden, and never contain tokens. Breakpoints 1100px and 767px; no horizontal scroll at 390px.
 
 ## Author checklist
 1. Both window styles, light and dark.

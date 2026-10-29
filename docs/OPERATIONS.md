@@ -26,7 +26,7 @@ Stop the server before copying its database, or use SQLite's backup API. Preserv
 
 ## Inference replicas
 
-Allowlist origins in the control-plane configuration. Only administrators may register endpoints. The gateway performs least-in-flight selection, not performance prediction, automatic failover or health-based removal. It never forwards platform bearer tokens. Connect remote workers through a secured private network or tunnel. Avoid publicly exposing unauthenticated model servers.
+Allowlist origins in the control-plane configuration. Only administrators may register endpoints. The gateway performs least-in-flight selection, not performance prediction or health-based removal. It tries one other replica before the first byte; there is no mid-stream failover. It never forwards platform bearer tokens. Connect remote workers through a secured private network or tunnel. Avoid publicly exposing unauthenticated model servers.
 
 The concurrency cap is per authenticated tenant. Administrator requests use the default tenant. Model markings apply to both tenant and administrator inference calls. Text requests have bounded message count, character count and max output tokens. Streaming (`"stream": true`, SSE) is forwarded. Tools/function calls are not: the gateway forwards only `model`, `messages`, `max_tokens` and `stream`.
 
