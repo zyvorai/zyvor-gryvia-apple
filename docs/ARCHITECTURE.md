@@ -8,6 +8,12 @@ The native agent reports Metal device identity, unified-memory capability, insta
 
 Jobs transition queued → running → succeeded/failed. Cancellation transitions queued → cancelled or running → cancelling → cancelled. A cancelled running job continues to reserve capacity until its agent acknowledges completion or its lease expires. Lease expiry retries only within the job's configured limit. Server-side deadlines transition running jobs to cancelling with a timeout reason. Successful exit cannot override a timeout; timeout failures may retry within the configured limit. Renewal is capped at the attempt deadline plus 20 seconds. Each retry gets a new opaque lease; stale attempts cannot complete or append logs.
 
+## Placement across Macs
+
+Placement is pull-based: each Mac claims the best queued job that fits it. A job may carry selectors, checked at claim time: `node` (pin), `avoidNodes` (up to 8 ids), `minGpuCores` and `minBudgetGiB`. Unmet selectors show as the job's wait reason.
+
+For GPU-bound kinds (train, benchmark, evaluate, quantize, fuse, serve) a Mac yields a job for at most 3 polls to another Mac that could run it right now and reports more than 25% more GPU cores. This is a hint, not a guarantee, and it is bounded so nothing starves. Core count is a proxy for speed, not a measurement; Gryvia does not benchmark Macs against each other. Jobs pinned with `node`, with a training checkpoint, or on Macs that do not report core counts never yield.
+
 ## Resource accounting
 
 MemoryGiB is a reservation for expected job demand. The controller atomically checks the node's remaining budget and the tenant's concurrent quota. Its fairness score is normalized memory use divided by queue weight; this is **not multi-resource DRF**. Runtime compatibility, node selection, health, drain and available execution slots are admission gates.

@@ -185,3 +185,8 @@ Changes and usage: [docs/FLEET-RELIABILITY.md](docs/FLEET-RELIABILITY.md).
 
 - **Verified (one Mac):** `GET /api/logs/{id}/stream` (SSE): role checks (agent 403, unknown job 404, bad `after` 400), drain-then-`event: end` for a finished job, resume after a sequence number (`tests/test_api.py`). The Playwright suite asserts the dashboard requests the stream, filters Models/Datasets, and switches the Workloads sort, with no JS errors.
 - **Not verified:** a long-running job streamed through a real agent; browser Notification permission prompts and the tab-title badge (need a hidden tab and a real permission grant, not exercised by the suite); sort and filter on the SwiftUI app (not implemented there).
+
+## Placement selectors and faster-Mac preference
+
+- **Verified (simulated nodes, one Mac):** `tests/test_placement.py` covers selector validation, `avoidNodes`, `minGpuCores`, `minBudgetGiB`, the bounded yield (a slower Mac waits exactly 3 polls, then runs the job), immediate claim by the faster Mac, and no yield when the faster Mac is draining or busy, for non-GPU kinds, pinned jobs, similar core counts or unknown core counts.
+- **Not verified:** behaviour on two physical Macs with real core counts; the effect on queue latency under load; selectors in the web and SwiftUI submit forms (CLI/API JSON only).
