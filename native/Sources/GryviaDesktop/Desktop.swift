@@ -1111,7 +1111,15 @@ struct JobDetail: View {
             }.card(radius: 10)
         }
         .padding(20).frame(width: 640, height: 560).background { AmbientBackground() }
-        .task { while !Task.isCancelled { await fleet.loadLogs(job.id); try? await Task.sleep(for: .seconds(2)) } }
+        .task {
+            // Stream new lines; if the stream is unavailable or drops, poll as before.
+            fleet.logs = []
+            do {
+                for try await rows in try fleet.api().followLogs(job.id) { fleet.logs.append(contentsOf: rows) }
+                return
+            } catch { if Task.isCancelled { return } }
+            while !Task.isCancelled { await fleet.loadLogs(job.id); try? await Task.sleep(for: .seconds(2)) }
+        }
     }
 }
 

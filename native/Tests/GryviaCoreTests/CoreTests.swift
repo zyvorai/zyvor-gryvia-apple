@@ -108,3 +108,16 @@ final class MemoryPressureTests: XCTestCase {
         if let available = report["availableGiB"] as? Double { XCTAssertGreaterThanOrEqual(available, 0) }
     }
 }
+
+final class LogStreamTests: XCTestCase {
+    func testParsesRowsKeepaliveAndEnd() {
+        var end = false
+        XCTAssertEqual(LogStreamEvent.parse(": keepalive", pendingEnd: &end), .ignore)
+        XCTAssertEqual(LogStreamEvent.parse("", pendingEnd: &end), .ignore)
+        let rows = LogStreamEvent.parse(#"data: [{"seq":3,"at":1.5,"text":"hello"}]"#, pendingEnd: &end)
+        XCTAssertEqual(rows, .rows([try! JSONDecoder().decode(LogLine.self, from: Data(#"{"seq":3,"at":1.5,"text":"hello"}"#.utf8))]))
+        XCTAssertEqual(LogStreamEvent.parse("event: end", pendingEnd: &end), .ignore)
+        XCTAssertEqual(LogStreamEvent.parse("data: {}", pendingEnd: &end), .end)
+        XCTAssertEqual(LogStreamEvent.parse("data: not json", pendingEnd: &end), .ignore)
+    }
+}
