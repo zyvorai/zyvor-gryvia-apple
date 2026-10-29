@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## v0.5.0 — 2026-10-29
+
+Built for a small fleet of 2 to 5 Macs running independent jobs and replicas. Nothing here has been run on two physical Macs (see `docs/RELEASE.md`).
+
+- **Add a Mac**: single-use, expiring join codes (`gryvia enroll create|list|revoke`, **Add a Mac** in the web dashboard and the Mac app, `install-agent.py --join/--code`). Agent tokens are stored hashed and can be revoked (`gryvia revoke-node`); `/api/enroll` is rate-limited. Static tokens in `config.json` keep working.
+- **Placement**: job selectors `avoidNodes`, `minGpuCores`, `minBudgetGiB`; a Mac may yield a job to a clearly faster idle Mac a bounded number of polls (3), so nothing starves. Cheaper claim polling for larger fleets.
+- **Reliability**: agents report `activeJobs` on every heartbeat, so a job the Mac no longer runs is released in about a second instead of after the 20 s lease; `gryvia backup` and `POST /api/backup` write consistent, pruned SQLite backups (admin only, server-chosen directory). Fixed a race between agent-token auth and heartbeats that could return HTTP 500, and every database access now holds the store lock (checked in CI with `GRYVIA_DEBUG_LOCKS=1`).
+- **Web dashboard**: live log streaming (SSE) with polling fallback, opt-in browser notifications, search and sort across jobs, Macs, models and datasets, per-Mac fleet cards with role and capacity bars, a 390 px mobile layout, and axe accessibility checks in CI.
+- **Mac app**: Add a Mac sheet, role and reservation chips, capacity bars, Workloads sort, Datasets and Alerts filters, live log streaming, and notification settings (job finished, Mac offline, background only).
+- **Docs**: getting started with a second Mac, backup and restore, TLS recipe for a private network, architecture notes on placement and fencing (lease tokens already fence stale workers; an epoch counter is not needed).
+- **Not included**: automatic model staging between Macs, `deploy --replicas N`, mutual TLS, distributed MLX.
+
 ## v0.4.3 — 2026-10-21
 
 - **Mac app**: new app icon (black tile, blue bloom, glowing G); the web dashboard favicon matches.
