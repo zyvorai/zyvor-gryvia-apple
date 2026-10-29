@@ -175,3 +175,8 @@ Changes and usage: [docs/FLEET-RELIABILITY.md](docs/FLEET-RELIABILITY.md).
   - Eviction with several concurrent deployments on one Mac.
   - Non-admin 403 on the live server (covered by the unit tests only).
   - GitHub CI: runs for PRs #11–#13 stayed queued, and those PRs merged without a CI result.
+
+## Enrollment (join codes)
+
+- **Verified (unit/integration, one Mac):** `tests/test_enroll.py` covers single use, expiry, node binding, re-enrolment replacing the token, revoke, hashed storage, input validation, the rate limiter, and an enrolled token driving `/api/agent/heartbeat` but not `/api/state`. `tests/test_cli.py` covers `gryvia enroll create|list|revoke`. The Playwright suite creates and revokes a code from the Mac fleet view.
+- **Not verified:** `install-agent.py --join` against a real launchd on a second Mac; enrolment over HTTPS with a real certificate; the `python3` on this shell is 3.9, so `tests/test_runtimes` (3.10+ syntax) did not import here.

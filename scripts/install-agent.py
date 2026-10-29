@@ -5,11 +5,15 @@
 import argparse,os,plistlib,subprocess,sys
 from pathlib import Path
 if sys.platform!='darwin':raise SystemExit('macOS required')
-p=argparse.ArgumentParser();p.add_argument('--binary',required=True);p.add_argument('--config',required=True);p.add_argument('--uninstall',action='store_true');p.add_argument('--replace',action='store_true',help='reinstall over an existing agent');a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--binary',required=True);p.add_argument('--config',required=True);p.add_argument('--uninstall',action='store_true');p.add_argument('--replace',action='store_true',help='reinstall over an existing agent');p.add_argument('--join',metavar='URL',help='control-plane URL; redeem --code for an agent token instead of GRYVIA_AGENT_TOKEN');p.add_argument('--code',help='single-use join code from `gryvia enroll create`');p.add_argument('--node',help='node id (default: this Mac\'s host name)');a=p.parse_args()
 label='dev.zyvor.gryvia.agent';plist=Path.home()/'Library/LaunchAgents'/f'{label}.plist';domain=f'gui/{os.getuid()}'
 if a.uninstall:
     subprocess.run(['launchctl','bootout',domain,str(plist)],check=False);plist.unlink(missing_ok=True);raise SystemExit(0)
 token=os.getenv('GRYVIA_AGENT_TOKEN','')
+if a.join:
+    if not a.code:p.error('--join needs --code')
+    sys.path.insert(0,str(Path(__file__).resolve().parent));import enrollment
+    node=a.node or enrollment.default_node();token=enrollment.redeem(a.join,a.code,node);print('Enrolled as',node)
 if len(token)<24:p.error('set GRYVIA_AGENT_TOKEN')
 binary=Path(a.binary).resolve();config=Path(a.config).resolve()
 if not os.access(binary,os.X_OK) or not config.is_file():p.error('binary/config unavailable')

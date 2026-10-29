@@ -31,6 +31,15 @@ class CliTests(unittest.TestCase):
             code = gryvia.main(["--server", f"http://127.0.0.1:{self.port}", *argv])
         return code, out.getvalue(), err.getvalue()
 
+    def test_enroll_create_list_revoke(self):
+        code, out, _ = self.run_cli("enroll", "create", "--node", "studio", "--ttl", "600")
+        self.assertEqual(code, 0)
+        j = json.loads(out)
+        self.assertEqual(j["node"], "studio")
+        self.assertEqual(json.loads(self.run_cli("enroll", "list")[1])[0]["state"], "open")
+        self.assertEqual(self.run_cli("enroll", "revoke", j["id"])[0], 0)
+        self.assertEqual(json.loads(self.run_cli("enroll", "list")[1]), [])
+
     def test_status_json_when_piped(self):
         code, out, _ = self.run_cli("status")
         self.assertEqual(code, 0)

@@ -14,6 +14,8 @@ await page.click('#run-demo');await page.waitForSelector('#toasts .toast');
 await page.click('[data-view="guide"]');await page.waitForSelector('#guide .glossary');await page.click('[data-view="overview"]');
 await page.click('[data-view="fleet"]');await page.waitForSelector('#nodes .node-card');if(await page.locator('#nodes .node-card').count()!==2)throw Error('fleet missing');
 await page.click('[data-policy-set="mini-01"][data-mode="idle"]');await page.waitForFunction(()=>document.querySelector('[data-policy-set="mini-01"][data-mode="idle"]').getAttribute('aria-pressed')==='true');
+await page.click('#join-create');await page.waitForSelector('#join-result strong');const code=await page.locator('#join-result strong').innerText();if(!/^[A-Z2-9]{5}-[A-Z2-9]{5}$/.test(code))throw Error('join code format '+code);await page.waitForSelector('#join-list [data-join-revoke]');await page.click('#join-list [data-join-revoke]');await page.waitForFunction(()=>!document.querySelector('#join-list [data-join-revoke]'));
+if(await page.evaluate(()=>JSON.stringify(localStorage)).then(v=>v.includes('-')&&v.includes(code)))throw Error('join code leaked into localStorage');
 await page.click('[data-drain="mini-01"]');await page.waitForFunction(()=>document.querySelector('[data-drain="mini-01"]').textContent.includes('Resume'));
 await page.click('[data-view="jobs"]');await page.fill('#submit input[name="model"]','Browser submitted job');await page.fill('#submit input[name="memoryGiB"]','2');await page.click('#submit button');await page.waitForFunction(()=>document.querySelector('#job-table').textContent.includes('Browser submitted job'));
 await page.click('#job-table [data-logs]');await page.waitForSelector('dialog[open]');await page.click('#close-logs');

@@ -56,6 +56,25 @@ function toast(msg, kind) {
 }
 const fail = e => { notice(hint(e.message)); };
 
+/* ---------- Add a Mac: single-use join codes ---------- */
+let joinsAt = 0;
+async function createJoin() {
+  try {
+    const j = await api('enroll/tokens', {ttl: 900});
+    const cmd = `python3 scripts/install-agent.py --binary /path/to/gryvia-agent --config agent.json --join ${demo ? 'https://your-control-plane' : location.origin} --code ${j.code}`;
+    $('#join-result').innerHTML = `<div class="queue-line"><span><strong class="mono">${esc(j.code)}</strong> <span class="muted">valid 15 min, single use${demo ? ' · simulated demo code' : ''}</span></span><button data-copy="${esc(cmd)}">Copy command</button></div><pre class="mono">${esc(cmd)}</pre>`;
+    await renderJoins(true);
+  } catch (e) { fail(e); }
+}
+async function renderJoins(force) {
+  if (!$('#join-list') || (!force && Date.now() - joinsAt < 10000)) return;
+  joinsAt = Date.now();
+  try {
+    const rows = await api('enroll/tokens');
+    $('#join-list').innerHTML = rows.length ? `<table><tr><th>Code</th><th>Node</th><th>State</th><th>Expires</th><th></th></tr>${rows.slice(0, 8).map(r => `<tr><td class="mono">${esc(r.id)}</td><td>${esc(r.node || 'any')}</td><td>${badge(r.state === 'used' ? 'succeeded' : r.state === 'open' ? 'running' : 'queued').replace(/>[^<]*</, '>' + esc(r.state) + '<')}</td><td>${esc(new Date(r.expires * 1000).toLocaleTimeString())}</td><td>${r.state === 'open' ? `<button data-join-revoke="${esc(r.id)}">Revoke</button>` : ''}</td></tr>`).join('')}</table>` : '';
+  } catch (e) { $('#join-list').textContent = ''; }
+}
+
 /* ---------- demo mode: clearly simulated ---------- */
 function startDemo() {
   const now = Date.now() / 1000;
@@ -136,6 +155,13 @@ function demoApi(path, body) {
     return Promise.resolve({id: w.id, name: w.name, base: w.base, datasetId: w.datasetId, iters: w.iters, grid: w.grid, runs: rows, best, complete: rows.every(r => ['succeeded', 'failed', 'cancelled'].includes(r.state))});
   }
   if (path === 'sweeps/cancel') { const w = d.sweeps.find(x => x.id === body.id); if (w) { w.cancelled = true; w.runs.forEach(r => { const j = d.jobs.find(x => x.id === r.job); if (j && j.state !== 'succeeded') j.state = 'cancelled'; }); } return Promise.resolve({}); }
+  if (path === 'enroll/tokens') {
+    d.joins = d.joins || [];
+    if (!body) return Promise.resolve(JSON.parse(JSON.stringify(d.joins)));
+    const j = {id: 'demo' + d.joins.length, code: 'DEMO1-' + Math.random().toString(36).slice(2, 6).toUpperCase(), node: body.node || null, created: now, expires: now + (body.ttl || 900), state: 'open'};
+    d.joins.unshift({id: j.id, node: j.node, created: j.created, expires: j.expires, state: 'open'}); return Promise.resolve(j);
+  }
+  if (path === 'enroll/revoke') { d.joins = (d.joins || []).filter(x => x.id !== body.id); return Promise.resolve({ok: true}); }
   if (path === 'history') return Promise.resolve([]);
   if (path.startsWith('runs/')) {
     const steps = Array.from({length: 20}, (_, i) => (i + 1) * 5);
@@ -237,8 +263,9 @@ function render() {
     <div class="policy"><small>When may this Mac run fleet work?</small>
       <div class="seg" role="group" aria-label="Work policy for ${esc(n.id)}" style="margin-top:6px">${[['always', 'Always'], ['idle', `When I'm away`], ['paused', 'Paused']].map(([m, l]) => `<button type="button" data-policy-set="${esc(n.id)}" data-mode="${m}" aria-pressed="${pol.mode === m}">${l}</button>`).join('')}</div></div>
     <div class="actions"><button data-node="${esc(n.id)}">Details</button><button data-drain="${esc(n.id)}" data-value="${!n.drain}">${n.drain ? 'Resume admission' : 'Drain node'}</button></div></article>`;
-  }).join('') || emptyArt('fleet', 'No Macs registered', 'Install the agent on a Mac and it appears here.');
+  }).join('') || emptyArt('fleet', 'No Macs registered', 'Open <strong>Mac fleet</strong> and create a join code to add one.');
   renderGantt();
+  if (view === 'fleet') renderJoins();
   $('#tenant-list').innerHTML = `<table><tr><th>Tenant</th><th>Quota</th><th>Reserved now</th><th>Weight</th><th>Budget used</th></tr>${tenants.map(t => { const used = ((state.usage || []).find(u => u.tenant === t.id)?.reservedGiBSeconds || 0) / 3600; return `<tr><td>${esc(t.id)}</td><td>${t.quota} GiB</td><td>${sum(jobs.filter(j => j.tenant === t.id && ACTIVE.includes(j.state)), j => j.spec.memoryGiB)} GiB</td><td>${t.weight}</td><td>${t.budget ? `${used.toFixed(1)} / ${t.budget} GiB-h` : 'no budget'}</td></tr>`; }).join('')}</table>`;
   $('#usage-list').innerHTML = (state.usage || []).map(u => `<div class="queue-line"><span>${esc(u.tenant)}</span><strong>${u.workerSeconds.toFixed(1)} worker-seconds · ${u.reservedGiBSeconds.toFixed(1)} GiB-seconds${u.kWh ? ` · ≈${(u.kWh * 1000).toFixed(1)} Wh (estimate)` : ''}</strong></div>`).join('') || '<div class="empty">Metered attempts appear after completion or lease expiry.</div>';
   renderModels();
@@ -419,7 +446,7 @@ function renderLive() {
       <div class="membar" aria-label="Memory">${segs}${mark}</div>
       <div class="legend"><span>${reservedOn(n.id, jobs).toFixed(1)} GiB reserved by ${mine.length} job${mine.length === 1 ? '' : 's'}</span>${n.gpuInUseMiB ? `<span>▏ ${(n.gpuInUseMiB / 1024).toFixed(1)} GiB in use</span>` : ''}<span>${esc(n.thermal || 'thermal unknown')}</span></div>
     </article>`;
-  }).join('') || emptyArt('fleet', 'No Macs registered yet', 'Start an agent: <code>make run-agent</code>');
+  }).join('') || emptyArt('fleet', 'No Macs registered yet', 'Press <strong>Create join code</strong> in Mac fleet, or run <code>make run-agent</code> on this Mac.');
 
   // scheduling flow with FLIP animation so chips visibly move queue → Mac
   const queued = jobs.filter(j => j.state === 'queued').sort((a, b) => b.spec.priority - a.spec.priority || a.created - b.created);
@@ -481,7 +508,7 @@ function renderGantt() {
     return `<div class="gantt-row"><div><strong>${esc(n.id)}</strong><br><small>${reservedOn(n.id, jobs).toFixed(1)} / ${n.budgetGiB} GiB</small></div><div class="lane">${bars || '<small class="lane-idle">idle</small>'}<i class="now-line" aria-hidden="true"></i></div></div>`;
   }).join('');
   const queued = jobs.filter(j => j.state === 'queued');
-  $('#gantt').innerHTML = rows ? `<div class="gantt-axis" aria-hidden="true"><span></span><div>${axis}</div></div>` + rows + (queued.length ? `<p class="gap">${queued.length} queued: ${queued.slice(0, 6).map(j => esc(j.spec.model || j.spec.runtime) + ' (' + esc(j.reason || 'waiting') + ')').join(', ')}</p>` : '') : emptyArt('fleet', 'No Macs registered', 'Install the agent on a Mac and it appears here.');
+  $('#gantt').innerHTML = rows ? `<div class="gantt-axis" aria-hidden="true"><span></span><div>${axis}</div></div>` + rows + (queued.length ? `<p class="gap">${queued.length} queued: ${queued.slice(0, 6).map(j => esc(j.spec.model || j.spec.runtime) + ' (' + esc(j.reason || 'waiting') + ')').join(', ')}</p>` : '') : emptyArt('fleet', 'No Macs registered', 'Open <strong>Mac fleet</strong> and create a join code to add one.');
 }
 function renderTemplates() {
   $('#templates').innerHTML = prefs.templates.map((t, i) => `<span class="chip"><button data-template="${i}" title="Apply template">${esc(t.name)}</button><button data-template-del="${i}" aria-label="Delete template">×</button></span>`).join('');
@@ -1079,6 +1106,9 @@ document.addEventListener('click', async e => {
     if (d.cancel) { await api('cancel', {id: d.cancel}); toast('Cancel requested'); await refresh(); }
     if (d.bump) { const j = find(d.bump); await api('priority', {id: d.bump, priority: Math.min(100, j.spec.priority + 10)}); await refresh(); toast('Priority raised'); }
     if (d.drain) { await api('drain', {id: d.drain, drain: d.value === 'true'}); await refresh(); }
+    if (b.id === 'join-create') await createJoin();
+    if (d.joinRevoke) { await api('enroll/revoke', {id: d.joinRevoke}); await renderJoins(true); toast('Join code revoked'); }
+    if (d.copy) { await navigator.clipboard.writeText(d.copy); toast('Copied'); }
     if (d.logs) await openLogs(d.logs);
     if (d.node) openNode(d.node);
     if (d.clone) { fillForm(find(d.clone).spec, find(d.clone).tenant); select('jobs'); $('#submit').scrollIntoView({block: 'center'}); toast('Form filled from workload'); }

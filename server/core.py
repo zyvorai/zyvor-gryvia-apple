@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BUSL-1.1
 # Copyright © 2026 Zyvor AI Labs Private Limited
 """Durable admission scheduler. All decisions and reservations share one SQLite transaction."""
-import hashlib, json, re, sqlite3, time, uuid, threading, math
+import hashlib, json, re, secrets, sqlite3, time, uuid, threading, math
 from server import ed25519
 
 RUNTIMES=['demo','mlx','llama','mps','coreml','download','bench','evaluate','quantize','train','serve','fuse']
@@ -80,6 +80,9 @@ class Store:
         CREATE TABLE IF NOT EXISTS node_telemetry(at REAL, node TEXT, util REAL, inUseGiB REAL, reservedGiB REAL);
         CREATE INDEX IF NOT EXISTS node_telemetry_node_at ON node_telemetry(node, at);
         CREATE TABLE IF NOT EXISTS decisions(seq INTEGER PRIMARY KEY AUTOINCREMENT, at REAL, job TEXT, node TEXT, kind TEXT, detail TEXT);
+        CREATE TABLE IF NOT EXISTS join_codes(id TEXT PRIMARY KEY, hash TEXT NOT NULL UNIQUE, node TEXT, created REAL NOT NULL, expires REAL NOT NULL, used REAL);
+        CREATE TABLE IF NOT EXISTS agent_tokens(hash TEXT PRIMARY KEY, node TEXT NOT NULL, created REAL NOT NULL);
+        CREATE INDEX IF NOT EXISTS agent_tokens_node ON agent_tokens(node);
         CREATE TABLE IF NOT EXISTS usage(id INTEGER PRIMARY KEY AUTOINCREMENT, job TEXT, tenant TEXT, node TEXT, seconds REAL, gibSeconds REAL, at REAL);
         ''')
         cols=[r['name'] for r in self.db.execute('PRAGMA table_info(jobs)')]
@@ -164,6 +167,60 @@ class Store:
             self._gate_last[('key',node)]=key; self.event('attest.key_mismatch',node,'a different signing key was presented; attestations are ignored until the key is reset')
     def reset_key(self,node):
         self.tx(lambda:(self.db.execute('DELETE FROM node_keys WHERE node=?',(node,)),self.event('attest.key_reset',node)))
+    # --- enrollment: single-use join codes exchanged for a per-node agent token. Only SHA-256 hashes are stored. ---
+    JOIN_ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'   # no 0/O/1/I
+    JOIN_TTL_MAX=86400
+    NODE_ID=re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$')
+    @staticmethod
+    def _digest(secret): return hashlib.sha256(secret.encode()).hexdigest()
+    def create_join(self,node=None,ttl=900):
+        """Admin creates a join code (shown once). If node is given the code can only enrol that node id."""
+        if node is not None and (not isinstance(node,str) or not self.NODE_ID.match(node)): raise Problem('invalid node id')
+        if type(ttl) not in (int,float) or isinstance(ttl,bool) or not 60<=ttl<=self.JOIN_TTL_MAX: raise Problem('ttl must be 60..%d seconds'%self.JOIN_TTL_MAX)
+        code=''.join(secrets.choice(self.JOIN_ALPHABET) for _ in range(10)); code=code[:5]+'-'+code[5:]
+        ident=uuid.uuid4().hex[:12]
+        def run():
+            now=self.clock()
+            self.db.execute('DELETE FROM join_codes WHERE expires<?',(now-86400,))
+            self.db.execute('INSERT INTO join_codes(id,hash,node,created,expires) VALUES(?,?,?,?,?)',(ident,self._digest(code),node,now,now+ttl))
+            self.event('enroll.created',node or '*',ident)
+        self.tx(run); return {'id':ident,'code':code,'node':node,'expires':self.clock()+ttl}
+    def list_joins(self):
+        with self.lock:
+            now=self.clock()
+            return [{'id':r['id'],'node':r['node'],'created':r['created'],'expires':r['expires'],'state':'used' if r['used'] else 'expired' if r['expires']<now else 'open'}
+                    for r in self.db.execute('SELECT id,node,created,expires,used FROM join_codes ORDER BY created DESC LIMIT 50')]
+    def revoke_join(self,ident):
+        def run():
+            if not self.db.execute('DELETE FROM join_codes WHERE id=? AND used IS NULL',(ident,)).rowcount: raise Problem('open join code not found',404)
+            self.event('enroll.revoked','*',ident)
+        self.tx(run)
+    def enroll(self,code,node,key=None):
+        """Exchange a valid join code for an agent token (returned once). Single use; the node id must be new unless the code names it."""
+        if not isinstance(code,str) or not 0<len(code)<=32: raise Problem('invalid or expired join code',403)
+        if not isinstance(node,str) or not self.NODE_ID.match(node): raise Problem('invalid node id')
+        token=secrets.token_urlsafe(32)
+        def run():
+            now=self.clock()
+            row=self.db.execute('SELECT * FROM join_codes WHERE hash=?',(self._digest(code.strip().upper()),)).fetchone()
+            if not row or row['used'] or row['expires']<now: raise Problem('invalid or expired join code',403)
+            if row['node'] and row['node']!=node: raise Problem('this join code is for a different node',403)
+            if not row['node'] and (self.db.execute('SELECT 1 FROM agent_tokens WHERE node=?',(node,)).fetchone() or self.db.execute('SELECT 1 FROM nodes WHERE id=?',(node,)).fetchone()):
+                raise Problem('node id already in use; ask an admin for a code bound to it',409)
+            self.db.execute('UPDATE join_codes SET used=? WHERE id=?',(now,row['id']))
+            self.db.execute('DELETE FROM agent_tokens WHERE node=?',(node,))   # re-enrolment replaces the old token
+            self.db.execute('INSERT INTO agent_tokens(hash,node,created) VALUES(?,?,?)',(self._digest(token),node,now))
+            self.pin_key(node,key); self.event('enroll.joined',node,row['id'])
+        self.tx(run); return token
+    def agent_actor(self,token):
+        if not token: return None
+        row=self.db.execute('SELECT node FROM agent_tokens WHERE hash=?',(self._digest(token),)).fetchone()
+        return {'role':'agent','node':row['node']} if row else None
+    def revoke_agent(self,node):
+        def run():
+            if not self.db.execute('DELETE FROM agent_tokens WHERE node=?',(node,)).rowcount: raise Problem('no enrolled token for that node',404)
+            self.event('enroll.token_revoked',node)
+        self.tx(run)
     def node_policy(self,node):
         row=self.db.execute('SELECT body FROM node_policy WHERE node=?',(node,)).fetchone()
         return json.loads(row['body']) if row else dict(DEFAULT_POLICY)
