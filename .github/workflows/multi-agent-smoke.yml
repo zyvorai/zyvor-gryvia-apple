@@ -1,0 +1,25 @@
+name: multi-agent-smoke
+# Two real gryvia-agent processes on one macOS runner. Slower and dearer than the PR checks, so it runs only on main and tags.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+concurrency:
+  group: multi-agent-smoke-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: { python-version: '3.14' }
+      - uses: maxim-lobanov/setup-xcode@v1
+        with: { xcode-version: latest-stable }
+      - run: cd native && swift build --product gryvia-agent
+      - run: python3 scripts/multi-agent-smoke.py
+        env: { GRYVIA_DEBUG_LOCKS: "1" }

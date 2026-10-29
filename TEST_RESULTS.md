@@ -274,3 +274,8 @@ Changes and usage: [docs/FLEET-RELIABILITY.md](docs/FLEET-RELIABILITY.md).
 
 - **Verified (dev Mac, Python 3.9, `GRYVIA_DEBUG_LOCKS=1`):** `tests/test_scheduler.py` (30 tests) including a new one: after a lease expires and the job is reclaimed on another Mac, the old worker's renew, complete and log writes, and the old lease presented from the new Mac, are all rejected, the new run keeps going and completes. Lease tokens were already unique per claim, so no code changed; the plan's "epoch fencing" item was judged unnecessary at the database level.
 - **Not verified:** the old worker's process actually stopping (a token cannot do that); behaviour across two physical Macs.
+
+## Two-agent smoke test in CI
+
+- **Added:** `.github/workflows/multi-agent-smoke.yml` runs `scripts/multi-agent-smoke.py` on a `macos-15` runner for pushes to `main`, tags `v*` and manual dispatch (not pull requests, to keep PR checks fast). The YAML parses; the job has not run on GitHub when this entry was written (see the line below if it was added after the first run).
+- **Not verified:** that the agent builds and the smoke test passes on a GitHub macOS runner; its timing there (the test uses real 20 s lease and sleeps and may be slower or flakier on a shared runner).
