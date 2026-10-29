@@ -91,13 +91,14 @@ class ProvenanceFlowTests(unittest.TestCase):
     def test_key_is_pinned_on_first_use(self):
         self.beat()
         self.beat(key="ff" * 32)                         # a different key later must not replace the pinned one
-        pinned = self.s.db.execute("SELECT pub FROM node_keys WHERE node='mac'").fetchone()["pub"]
+        with self.s.lock: pinned = self.s.db.execute("SELECT pub FROM node_keys WHERE node='mac'").fetchone()["pub"]
         self.assertEqual(pinned, self.pub)
         kinds = [e["kind"] for e in self.s.snapshot()["events"]]
         self.assertIn("attest.key_mismatch", kinds)
         self.s.reset_key("mac")
         self.beat(key="ff" * 32)
-        self.assertEqual(self.s.db.execute("SELECT pub FROM node_keys WHERE node='mac'").fetchone()["pub"], "ff" * 32)
+        with self.s.lock: pinned = self.s.db.execute("SELECT pub FROM node_keys WHERE node='mac'").fetchone()["pub"]
+        self.assertEqual(pinned, "ff" * 32)
 
     def test_unsigned_completion_leaves_model_unverified(self):
         self.s.model("m", dict(memoryGiB=1, runtime="llama", status="onboarding"))

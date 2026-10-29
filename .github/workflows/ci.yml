@@ -19,6 +19,7 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version: '22' }
       - run: python3 -m unittest discover -s tests -v
+        env: { GRYVIA_DEBUG_LOCKS: "1" }   # fails if any SQLite statement runs without store.lock
       - run: python3 scripts/check-headers.py
       - run: python3 scripts/set-version.py --check
       - run: python3 -m compileall -q server runtimes scripts

@@ -63,7 +63,7 @@ class DeadlineTests(unittest.TestCase):
         for bad in [[], ['ok', 1], ['x' * 8193], ['😀' * 2049], ['x'] * 101, ['x' * 8000] * 7]:
             with self.assertRaises(Problem):
                 self.store.logs('mini', job, claim['lease'], bad)
-        rows = self.store.db.execute('SELECT text FROM logs ORDER BY seq').fetchall()
+        with self.store.lock: rows = self.store.db.execute('SELECT text FROM logs ORDER BY seq').fetchall()
         self.assertEqual([r['text'] for r in rows], ['one', 'two', 'three'])
 
     def test_log_batch_stale_attempt_rejected(self):

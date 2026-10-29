@@ -9,6 +9,7 @@
 | Native logic | `cd native && swift test` | Xcode / Swift 6 |
 | Everything above except web | `make verify` | macOS |
 | Agent → API → subprocess → logs → completion | `bash scripts/mac-smoke.sh` | macOS, port 8443 free |
+| Every SQLite statement holds `store.lock` (one connection is shared by handler threads) | `GRYVIA_DEBUG_LOCKS=1 python3 -m unittest discover -s tests` (set by `make verify`, `scripts/verify.sh` and CI) | any; wraps the connection and raises on an unlocked statement; checks only the code paths the tests run |
 | Two real agents, join-code enrolment, kill and restart one mid-job | `python3 scripts/multi-agent-smoke.py` | macOS, `swift build --product gryvia-agent` first; two processes on one Mac, not two Macs; not run by CI |
 | Package | `scripts/package-mac.sh $(cat VERSION)` | macOS |
 

@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PY="${PYTHON:-python3}"
-"$PY" -m unittest discover -s tests -v
+GRYVIA_DEBUG_LOCKS=1 "$PY" -m unittest discover -s tests -v   # fails if any SQLite statement runs without store.lock
 "$PY" -m compileall -q server scripts runtimes
 node --check web/app.js
 if command -v swift >/dev/null; then

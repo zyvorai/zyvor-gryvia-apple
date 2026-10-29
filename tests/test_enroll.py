@@ -17,7 +17,7 @@ class EnrollStoreTests(unittest.TestCase):
         self.assertEqual(self.store.agent_actor(token),{'role':'agent','node':'studio'})
         with self.assertRaises(Problem) as c: self.store.enroll(j['code'],'studio2')
         self.assertEqual(c.exception.status,403)
-        dump=' '.join(str(tuple(r)) for t in ('join_codes','agent_tokens') for r in self.store.db.execute('SELECT * FROM '+t))
+        with self.store.lock: dump=' '.join(str(tuple(r)) for t in ('join_codes','agent_tokens') for r in self.store.db.execute('SELECT * FROM '+t))
         self.assertNotIn(j['code'],dump); self.assertNotIn(token,dump)
     def test_expiry(self):
         j=self.store.create_join(ttl=60); self.clock.t+=61
@@ -102,3 +102,15 @@ class ConcurrencyTests(unittest.TestCase):
             [t.start() for t in readers]; writer.start(); writer.join(); stop.set(); [t.join() for t in readers]
             store.db.close()
             self.assertEqual(errors,[])
+
+
+class LockCheckTests(unittest.TestCase):
+    def test_debug_wrapper_rejects_unlocked_statements_and_allows_locked_ones(self):
+        import os, tempfile
+        from server.core import LockCheckedConnection
+        with tempfile.TemporaryDirectory() as d:
+            store=Store(d+'/db'); store.db=LockCheckedConnection(store.db,store.lock)
+            with self.assertRaises(AssertionError): store.db.execute('SELECT 1')
+            with store.lock: self.assertEqual(store.db.execute('SELECT 1').fetchone()[0],1)
+            self.assertEqual(store.snapshot()['jobs'],[]); store.create_join(); store.list_joins()    # public entry points take the lock themselves
+            store.db.close()
