@@ -24,6 +24,9 @@ The control plane serves `style-src 'self'`, so the browser ignores `style="…"
 ## Mac fleet cards
 Each card shows a role (Serving, Training, Benchmarking, Running, Idle, Draining, Drained, Offline) derived from the jobs the Mac holds, a capacity bar, and the slot count. The bar's coloured segments are admission **reservations** (bookkeeping, not measured use); the dark marker is the GPU memory this agent has allocated; GPU busy is for the **whole device**, not only Gryvia jobs.
 
+## Native app parity
+The SwiftUI Fleet pane has **Add a Mac** (toolbar-style button and ⌘K command: creates a single-use join code, shows the install command, copies it, lists and revokes recent codes, notes when a new Mac appears) and a role chip plus reserved/budget GiB on each Mac. Not yet in the native app: capacity bar, live log streaming, filters on Models/Datasets/Activity, and the Workloads sort. `GryviaDesktop --snapshot DIR` renders the sheet with a clearly fake preview code (`DEMO1-DEMO2`).
+
 ## Author checklist
 Checked automatically (`tests/a11y.cjs`, run by `scripts/browser-test.sh` and CI): every view at 1440 px and 390 px, light and dark, has no horizontal page scroll and no axe-core WCAG 2.x A/AA violation. Not checked automatically: AAA, keyboard-order, screen-reader output, non-default accent colours, the SwiftUI app.
 
