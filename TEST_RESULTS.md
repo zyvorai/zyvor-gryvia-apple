@@ -214,3 +214,8 @@ Changes and usage: [docs/FLEET-RELIABILITY.md](docs/FLEET-RELIABILITY.md).
 - **Fixed:** 25 template sites now use `data-style`, applied via a `MutationObserver` and the CSSOM. The browser suite and the 16-view axe walk fail on any CSP violation; `tests/test_web.py` fails on a new `style="` in a template.
 - **Verified (dev Mac, Chromium):** fleet cards show role badge, capacity bar (reserved segment 33% and live marker at 25% in the fixture, checked by width and by screenshot), slots, and a role that follows drain; no CSP violations; axe/mobile check still passes.
 - **Not verified:** real fleet data (fixtures have 2 Macs, one job); role for a Mac running mixed job kinds beyond the fixed precedence (serve > train/fuse/quantize > benchmark > running); the SwiftUI fleet view (unchanged); other accent colours.
+
+## SwiftUI: Add a Mac and fleet role chips
+
+- **Verified (dev Mac):** `swift build` and `swift test` pass (existing XCTest suites; nothing new added: the Desktop target is an executable and has no test target). `GryviaDesktop --snapshot` against the Playwright fixture server rendered the Fleet pane and the Add-a-Mac sheet in light and dark; the sheet and the new chips were checked by eye in the light PNGs only (dark PNGs were written but not looked at).
+- **Not verified:** the sheet creating, listing and revoking real codes (only its preview state was rendered; the endpoints themselves are covered by `tests/test_enroll.py`); the clipboard copy; VoiceOver reading of the code; the Add-a-Mac flow against an HTTPS control plane; role chip for Macs running mixed job kinds.

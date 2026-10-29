@@ -715,6 +715,7 @@ struct ContentView: View {
     @State private var filter = ""
     @State private var selected: Job?
     @State private var showSubmit = false
+    @State private var showAddMac = false
     @State private var showPalette = false
 
     @Environment(\.colorScheme) private var scheme
@@ -723,6 +724,7 @@ struct ContentView: View {
         var list = Pane.allCases.map { p in PaletteCommand(title: "Go to \(p.rawValue)", symbol: p.symbol) { section = p } }
         list.append(PaletteCommand(title: "Run demo job", symbol: "play.fill") { Task { await fleet.runDemo() } })
         list.append(PaletteCommand(title: "Submit a workload", symbol: "plus") { showSubmit = true })
+        list.append(PaletteCommand(title: "Add a Mac", symbol: "desktopcomputer.and.arrow.down") { showAddMac = true })
         list.append(PaletteCommand(title: "Refresh", symbol: "arrow.clockwise") { Task { await fleet.refresh() } })
         list.append(PaletteCommand(title: "Show the welcome screen", symbol: "hand.wave") { UserDefaults.standard.set(false, forKey: "welcomeSeen") })
         return list
@@ -795,6 +797,7 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showSubmit) { SubmitSheet(fleet: fleet) }
+        .sheet(isPresented: $showAddMac) { AddMacSheet(fleet: fleet) }
         .sheet(item: $selected) { job in JobDetail(fleet: fleet, job: job) }
     }
 
@@ -897,6 +900,16 @@ struct ContentView: View {
         .padding(16).background(.tint.opacity(0.08), in: .rect(cornerRadius: 16))
     }
 
+    /// Same precedence as the web cards: serving, training, benchmarking, running, else idle.
+    func nodeRole(_ n: Node, _ held: [Job]) -> String {
+        if !n.online { return "offline" }
+        if n.drain { return held.isEmpty ? "drained" : "draining" }
+        let kinds = Set(held.map { $0.spec.kind ?? $0.spec.runtime })
+        if kinds.contains("serve") { return "serving" }
+        if !kinds.isDisjoint(with: ["train", "fuse", "quantize"]) { return "training" }
+        if !kinds.isDisjoint(with: ["benchmark", "evaluate", "bench"]) { return "benchmarking" }
+        return held.isEmpty ? "idle" : "running"
+    }
     var fleetList: some View {
         let nodes = (fleet.state?.nodes ?? []).filter { filter.isEmpty || $0.id.localizedCaseInsensitiveContains(filter) }
         let online = nodes.filter(\.online).count
@@ -907,7 +920,8 @@ struct ContentView: View {
                            sentence: "Each Mac running the Gryvia agent, and when it may take work. \(nodes.count - online) offline.",
                            chips: [("\(nodes.reduce(0) { $0 + ($1.gpuCores ?? 0) })", "GPU cores"), (String(format: "%.0f GiB", nodes.filter(\.online).reduce(0) { $0 + $1.budgetGiB }), "budget")],
                            ring: utils.isEmpty ? nil : (utils.reduce(0, +) / Double(utils.count) / 100, String(format: "%.0f%%", utils.reduce(0, +) / Double(utils.count)), "GPU busy"))
-                if nodes.isEmpty { TeachingEmpty(symbol: "desktopcomputer", title: "No Macs yet", what: "A Mac joins the fleet by running the Gryvia agent. It reports its GPU, memory and thermal state, and takes jobs that fit.", next: "Run `make run-agent` on a Mac") }
+                HStack { Spacer(); Button("Add a Mac", systemImage: "plus.rectangle.on.rectangle") { showAddMac = true }.disabled(fleet.token.isEmpty).help("Create a single-use join code for a new Mac") }
+                if nodes.isEmpty { TeachingEmpty(symbol: "desktopcomputer", title: "No Macs yet", what: "A Mac joins the fleet by running the Gryvia agent. It reports its GPU, memory and thermal state, and takes jobs that fit.", next: "Press Add a Mac, or run `make run-agent` on this Mac") }
                 ForEach(nodes) { n in
                     HStack(spacing: 14) {
                         Image(systemName: "desktopcomputer").font(.title2).foregroundStyle(n.online ? .green : .secondary).frame(width: 32)
@@ -916,7 +930,9 @@ struct ContentView: View {
                             Text([n.gpuModel, n.gpuCores.map { "\($0) GPU cores" }, n.totalGiB.map { String(format: "%.0f GiB unified memory", $0) }].compactMap { $0 }.joined(separator: " · "))
                                 .font(.caption).foregroundStyle(.secondary)
                             HStack(spacing: 6) {
-                                Chip(text: String(format: "%.0f GiB budget", n.budgetGiB), color: .accentColor)
+                                let held = (fleet.state?.jobs ?? []).filter { $0.node == n.id && ["running", "cancelling"].contains($0.state) }
+                                Chip(text: nodeRole(n, held).capitalized, color: n.online ? .accentColor : .secondary)
+                                Chip(text: String(format: "%.1f / %.0f GiB reserved", held.reduce(0) { $0 + $1.spec.memoryGiB }, n.budgetGiB), color: .accentColor)
                                 ForEach(n.runtimes, id: \.self) { Chip(text: $0) }
                                 if let t = n.thermal { Chip(text: "thermal " + t, color: ["serious", "critical"].contains(t) ? .red : .green) }
                                 if let g = n.gate, !g.allowed { Chip(text: g.reason, color: .orange) }

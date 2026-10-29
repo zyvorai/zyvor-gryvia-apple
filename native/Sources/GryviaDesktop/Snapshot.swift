@@ -42,7 +42,7 @@ enum DesignSnapshot {
         }
         for (scheme, name) in [(NSAppearance.Name.aqua, "light"), (NSAppearance.Name.darkAqua, "dark")] {
             var sheets: [(String, AnyView)] = [("welcome", AnyView(WelcomeView(onDone: {}, onConnect: {}))), ("about", AnyView(AboutView())),
-                                               ("palette", AnyView(PaletteView(commands: Pane.allCases.map { p in PaletteCommand(title: "Go to \(p.rawValue)", symbol: p.symbol) {} }, dismiss: {})))]
+                                               ("add-mac", AnyView(AddMacSheet(fleet: fleet, preview: NewJoin(id: "preview", code: "DEMO1-DEMO2", node: nil, expires: Date().timeIntervalSince1970 + 900)))), ("palette", AnyView(PaletteView(commands: Pane.allCases.map { p in PaletteCommand(title: "Go to \(p.rawValue)", symbol: p.symbol) {} }, dismiss: {})))]
             if let queued = fleet.state?.jobs.first(where: { $0.state == "queued" }) { sheets.append(("job-detail", AnyView(JobDetail(fleet: fleet, job: queued)))) }
             for (label, view) in sheets {
                 let host = NSHostingView(rootView: view)
