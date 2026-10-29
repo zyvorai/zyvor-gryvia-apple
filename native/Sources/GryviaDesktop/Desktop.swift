@@ -716,6 +716,7 @@ struct ContentView: View {
     }
     @AppStorage("welcomeHidden") private var welcomeHidden = false
     @State private var filter = ""
+    @State private var jobSort = JobSort.newest
     @State private var selected: Job?
     @State private var showSubmit = false
     @State private var showAddMac = false
@@ -955,17 +956,32 @@ struct ContentView: View {
         }
     }
 
+    enum JobSort: String, CaseIterable, Identifiable {
+        case newest = "Newest", oldest = "Oldest", memory = "Memory", priority = "Priority", state = "State"
+        var id: String { rawValue }
+    }
+
     var workloads: some View {
         let jobs = (fleet.state?.jobs ?? []).filter {
             filter.isEmpty || ($0.spec.model ?? $0.spec.runtime).localizedCaseInsensitiveContains(filter)
                 || $0.id.localizedCaseInsensitiveContains(filter) || $0.tenant.localizedCaseInsensitiveContains(filter)
                 || $0.state.localizedCaseInsensitiveContains(filter)
+        }.sorted { a, b in
+            switch jobSort {
+            case .newest: return a.created > b.created
+            case .oldest: return a.created < b.created
+            case .memory: return a.spec.memoryGiB > b.spec.memoryGiB
+            case .priority: return (a.spec.priority, a.created) > (b.spec.priority, b.created)
+            case .state: return (a.state, a.created) < (b.state, b.created)
+            }
         }
         return ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HeroHeader(eyebrow: "Workloads", figure: "\(fleet.running)", unit: fleet.running == 1 ? "running" : "running now",
                            sentence: "Every job, newest first. Click one to read its logs. \(jobs.count) shown.",
                            chips: [("\(fleet.queued)", "queued"), ("\(fleet.state?.jobs.filter { $0.state == "succeeded" }.count ?? 0)", "succeeded"), ("\(fleet.state?.jobs.filter { $0.state == "failed" }.count ?? 0)", "failed")])
+                Picker("Sort workloads", selection: $jobSort) { ForEach(JobSort.allCases) { Text($0.rawValue).tag($0) } }
+                    .pickerStyle(.menu).fixedSize().accessibilityLabel("Sort workloads by")
                 jobRows(jobs).padding(.horizontal, 16).card()
             }.padding(24)
         }
