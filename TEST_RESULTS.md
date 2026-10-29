@@ -277,5 +277,6 @@ Changes and usage: [docs/FLEET-RELIABILITY.md](docs/FLEET-RELIABILITY.md).
 
 ## Two-agent smoke test in CI
 
-- **Added:** `.github/workflows/multi-agent-smoke.yml` runs `scripts/multi-agent-smoke.py` on a `macos-15` runner for pushes to `main`, tags `v*` and manual dispatch (not pull requests, to keep PR checks fast). The YAML parses; the job has not run on GitHub when this entry was written (see the line below if it was added after the first run).
-- **Not verified:** that the agent builds and the smoke test passes on a GitHub macOS runner; its timing there (the test uses real 20 s lease and sleeps and may be slower or flakier on a shared runner).
+- **Added:** `.github/workflows/multi-agent-smoke.yml` runs `scripts/multi-agent-smoke.py` on a `macos-15` runner for pushes to `main`, tags `v*` and manual dispatch (not pull requests, to keep PR checks fast). The YAML parses.
+- **Verified (GitHub `macos-15` runner, run 40883047951 on the merge of PR #70, 29 October 2026):** the agent built and all 8 checks passed in about 2 minutes (the lost job was released after 1.4 s, as on the dev Mac), with `GRYVIA_DEBUG_LOCKS=1`.
+- **Not verified:** that it stays green over many runs (one run only; the test uses real 20 s lease timing and sleeps and may be flakier on a busy shared runner); a tag-triggered run.
