@@ -219,3 +219,30 @@ class PowerHelperParseTests(unittest.TestCase):
         got = mod.parse(raw + b"\x00junk")
         self.assertEqual(got, {"packageW": 7.3, "cpuW": 3.2, "gpuW": 4.1, "aneW": 0.0})
         self.assertEqual(mod.parse(plistlib.dumps({"x": 1}))["packageW"], None)
+
+
+class ParentLossTests(unittest.TestCase):
+    def test_wrapper_child_dies_when_agent_is_killed(self):
+        import signal, subprocess, time
+        with tempfile.TemporaryDirectory() as d:
+            pidfile = Path(d) / "child.pid"
+            wrapper = (
+                "import sys,time,subprocess;sys.path.insert(0,%r);import _common\n"
+                "m=_common.ManagedProcess(['/bin/sleep','300']);open(%r,'w').write(str(m.proc.pid));m.proc.wait()\n"
+            ) % (str(ROOT / "runtimes"), str(pidfile))
+            # the "agent" is a throwaway parent that launches the wrapper, as gryvia-agent does
+            agent = subprocess.Popen([sys.executable, "-c", "import subprocess,sys,time;subprocess.Popen([sys.executable,'-c',sys.argv[1]]);time.sleep(300)", wrapper])
+            try:
+                for _ in range(100):
+                    if pidfile.exists() and pidfile.read_text(): break
+                    time.sleep(0.05)
+                child = int(pidfile.read_text())
+                os.kill(child, 0)                      # running
+                agent.kill(); agent.wait()             # SIGKILL: no chance to clean up
+                for _ in range(100):
+                    try: os.kill(child, 0)
+                    except ProcessLookupError: break
+                    time.sleep(0.05)
+                with self.assertRaises(ProcessLookupError): os.kill(child, 0)
+            finally:
+                if agent.poll() is None: agent.kill(); agent.wait()
