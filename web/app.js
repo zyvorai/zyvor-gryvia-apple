@@ -20,7 +20,7 @@ try { token = sessionStorage.getItem('gryvia.token') || ''; } catch {}
 
 /* ---------- preferences (never contains the token) ---------- */
 const PREF_KEY = 'gryvia-preferences';
-let prefs = {welcomeHidden: false, theme: 'auto', window: 'macos27', accent: 'blue', interval: 5000, reduce: false, templates: []};
+let prefs = {welcomeHidden: false, theme: 'auto', window: 'macos27', accent: 'blue', interval: 5000, reduce: false, notify: false, templates: []};
 try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREF_KEY) || '{}')); } catch {}
 function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch {} applyPrefs(); }
 function applyPrefs() {
@@ -30,7 +30,7 @@ function applyPrefs() {
   r.dataset.accent = prefs.accent;
   r.dataset.reduceTransparency = String(!!prefs.reduce);
   $('#set-theme').value = prefs.theme; $('#set-window').value = prefs.window;
-  $('#set-interval').value = String(prefs.interval); $('#set-reduce').checked = !!prefs.reduce;
+  $('#set-interval').value = String(prefs.interval); $('#set-reduce').checked = !!prefs.reduce; $('#set-notify').checked = !!prefs.notify && notifyAllowed();
   $$('.swatch').forEach(b => b.setAttribute('aria-checked', String(b.dataset.accent === prefs.accent)));
   restartTimer();
 }
@@ -55,6 +55,24 @@ function toast(msg, kind) {
   $('#toasts').append(t); setTimeout(() => t.remove(), 3600);
 }
 const fail = e => { notice(hint(e.message)); };
+
+/* ---------- notifications: opt-in, browser-local, no secrets in the text ---------- */
+const notifyAllowed = () => typeof Notification !== 'undefined' && Notification.permission === 'granted';
+let seenStates = null, unseen = 0;
+const baseTitle = document.title;
+function watchChanges(st) {
+  const now = new Map(st.jobs.map(j => [j.id, j.state])), nodes = new Map(st.nodes.map(n => [n.id, n.online]));
+  const prev = seenStates; seenStates = {jobs: now, nodes};
+  if (!prev) return;      // first snapshot: nothing is news yet
+  const news = [];
+  st.jobs.forEach(j => { const was = prev.jobs.get(j.id); if (was && was !== j.state && ['succeeded', 'failed'].includes(j.state)) news.push([j.state === 'failed' ? 'Workload failed' : 'Workload finished', (j.spec.model || j.spec.runtime) + (j.node ? ' on ' + j.node : '') + (j.state === 'failed' && j.reason ? ': ' + j.reason : '')]); });
+  st.nodes.forEach(n => { if (prev.nodes.get(n.id) === true && !n.online) news.push(['Mac offline', n.id + ' stopped reporting']); });
+  if (!news.length) return;
+  if (document.hidden) { unseen += news.length; document.title = '(' + unseen + ') ' + baseTitle; }
+  if (prefs.notify && notifyAllowed() && document.hidden) news.slice(0, 3).forEach(([t, b]) => { try { new Notification(t, {body: b, tag: 'gryvia-' + t}); } catch {} });
+  if (news.length > 3 && prefs.notify) toast(news.length + ' updates');
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { unseen = 0; document.title = baseTitle; } });
 
 /* ---------- Add a Mac: single-use join codes ---------- */
 let joinsAt = 0;
@@ -214,9 +232,12 @@ function table(jobs, withSelect) {
   if (!jobs.length) return emptyArt('queue', 'No workloads match', 'Submit a native job, or press <strong>Run demo job</strong>.');
   return `<div class="table-wrap"><table><thead><tr><th></th><th>Workload</th><th>Tenant</th><th>State</th><th>Reservation</th><th>Placement</th><th>Actions</th></tr></thead><tbody>${jobs.map(j => jobRow(j, withSelect)).join('')}</tbody></table></div>`;
 }
+const matches = (id, ...vals) => { const q = $(id).value.trim().toLowerCase(); return !q || JSON.stringify(vals).toLowerCase().includes(q); };
+const JOB_SORTS = {priority: (a, b) => b.spec.priority - a.spec.priority || b.created - a.created, memory: (a, b) => b.spec.memoryGiB - a.spec.memoryGiB, state: (a, b) => a.state.localeCompare(b.state) || b.created - a.created};
 function filtered() {
   const q = $('#filter').value.toLowerCase(), st = $('#state-filter').value;
-  return state.jobs.filter(j => (!st || j.state === st) && JSON.stringify([j.spec.model, j.spec.runtime, j.tenant, j.state, j.id, j.spec.labels]).toLowerCase().includes(q));
+  const rows = state.jobs.filter(j => (!st || j.state === st) && JSON.stringify([j.spec.model, j.spec.runtime, j.tenant, j.state, j.id, j.spec.labels]).toLowerCase().includes(q));
+  const by = JOB_SORTS[$('#job-sort').value]; return by ? rows.slice().sort(by) : rows;
 }
 function spark(vals, cls, label, fmt) {
   if (vals.length < 2) return `<div class="spark ${cls}"><small>${label}</small><div class="muted">Collecting samples…</div></div>`;
@@ -252,7 +273,7 @@ function render() {
   $('#job-table').innerHTML = table(filtered(), true);
   $('#bulk').hidden = selected.size === 0; $('#bulk-count').textContent = `${selected.size} selected`;
   nodes.forEach(n => { const h = idleHist[n.id] = idleHist[n.id] || []; const v = n.presence?.idleSeconds; if (typeof v === 'number' && (!h.length || h[h.length - 1].t !== state.time)) { h.push({t: state.time, v: n.presence?.locked ? 3600 : v}); if (h.length > 60) h.shift(); } });
-  $('#nodes').innerHTML = nodes.map(n => {
+  $('#nodes').innerHTML = nodes.filter(n => matches('#node-filter', n.id, n.gpu, n.host, n.labels, n.runtimes)).map(n => {
     const pol = n.policy || {mode: 'always', idleMinutes: 5}, gate = n.gate || {allowed: true, reason: ''}, pr = n.presence || {};
     const presence = [pr.idleSeconds !== undefined ? (pr.locked ? 'screen locked' : 'idle ' + (pr.idleSeconds < 90 ? Math.round(pr.idleSeconds) + ' s' : Math.round(pr.idleSeconds / 60) + ' min')) : null,
       pr.onBattery ? `battery ${Math.round(pr.batteryPct ?? 0)}%` : (pr.batteryPct !== undefined ? 'plugged in' : null), pr.lowPowerMode ? 'Low Power Mode' : null, pr.micInUse ? 'mic in use' : null].filter(Boolean).join(' · ');
@@ -270,7 +291,8 @@ function render() {
   $('#usage-list').innerHTML = (state.usage || []).map(u => `<div class="queue-line"><span>${esc(u.tenant)}</span><strong>${u.workerSeconds.toFixed(1)} worker-seconds · ${u.reservedGiBSeconds.toFixed(1)} GiB-seconds${u.kWh ? ` · ≈${(u.kWh * 1000).toFixed(1)} Wh (estimate)` : ''}</strong></div>`).join('') || '<div class="empty">Metered attempts appear after completion or lease expiry.</div>';
   renderModels();
   if (view === 'overview') renderIdle();
-  $('#events').innerHTML = events.length ? `<table><tr><th>Time</th><th>Event</th><th>Subject</th><th>Detail</th></tr>${events.map(e => `<tr><td>${esc(new Date(e.at * 1000).toLocaleString())}</td><td>${esc(e.kind)}</td><td>${esc(e.subject)}</td><td>${esc(e.detail)}</td></tr>`).join('')}</table>` : '<div class="empty">No administrator activity visible.</div>';
+  const shownEvents = events.filter(e => matches('#event-filter', e.kind, e.subject, e.detail));
+  $('#events').innerHTML = shownEvents.length ? `<table><tr><th>Time</th><th>Event</th><th>Subject</th><th>Detail</th></tr>${shownEvents.map(e => `<tr><td>${esc(new Date(e.at * 1000).toLocaleString())}</td><td>${esc(e.kind)}</td><td>${esc(e.subject)}</td><td>${esc(e.detail)}</td></tr>`).join('')}</table>` : '<div class="empty">No administrator activity visible.</div>';
   const al = alerts(), badgeEl = $('#alert-count');
   badgeEl.hidden = al.length === 0; badgeEl.textContent = al.length;
   $('#alert-list').innerHTML = al.length ? al.map(a => `<div class="queue-line"><span>${badge(a.level === 'error' ? 'failed' : a.level === 'warn' ? 'queued' : 'running')} <strong>${esc(a.title)}</strong></span><span class="muted">${esc(a.detail)}</span></div>`).join('') : emptyArt('chart', 'All clear', 'No offline Macs, thermal limits or long waits.');
@@ -548,7 +570,7 @@ function provBadge(m) {
   return '<span class="badge queued" title="An attestation was missing or failed verification">unverified</span> ';
 }
 function renderModels() {
-  const models = state.models;
+  const models = state.models.filter(m => matches('#model-filter', m.id, m.runtime, m.status, m.source, m.quant));
   const tps = models.map(m => latest(m.id, 'benchmark')?.body.generationTokensPerSecond).filter(Number.isFinite), top = Math.max(1, ...tps);
   $('#model-list').innerHTML = models.map(m => {
     const b = latest(m.id, 'benchmark')?.body, e = latest(m.id, 'evaluate')?.body, st = m.status || 'ready';
@@ -727,7 +749,7 @@ $('#pg-send').onclick = async () => {
 /* ---------- Build / Run: datasets, training, workflows, deployments ---------- */
 const nodeOptions = (cap) => state.nodes.filter(n => !cap || n.runtimes.includes(cap)).map(n => `<option value="${esc(n.id)}">${esc(n.id)}${n.online ? '' : ' (offline)'}</option>`).join('') || '<option value="">No Mac has this runtime yet</option>';
 function renderBuild() {
-  const ds = state.datasets || [];
+  const ds = (state.datasets || []).filter(d => matches('#dataset-filter', d.id, d.status, d.node, d.source, d.path));
   $('#dataset-list').innerHTML = ds.length ? `<table><tr><th>Dataset</th><th>Status</th><th>Rows</th><th>Size</th><th>Mac</th><th>Source</th></tr>${ds.map(d => `<tr><td><strong>${esc(d.id)}</strong></td><td>${badge(d.status === 'ready' ? 'succeeded' : d.status === 'failed' ? 'failed' : 'queued').replace(/>[^<]*</, '>' + esc(d.status) + '<')}</td><td>${d.rows ?? '—'}</td><td>${GB(d.bytes)}</td><td>${esc(d.node || '—')}</td><td>${esc(d.source || d.path || '')}</td></tr>`).join('')}</table>` : emptyArt('queue', 'No datasets yet', 'Add one from Hugging Face below, or register a file already on a Mac.');
   $('#dataset-node').innerHTML = nodeOptions('download'); $('#dataset-local-node').innerHTML = nodeOptions();
   $('#workflow-node').innerHTML = nodeOptions('download');
@@ -929,7 +951,7 @@ async function refresh() {
   if ((!token && !demo) || busy) return;
   busy = true;
   try {
-    state = await api('state');
+    state = await api('state'); watchChanges(state);
     try { telemetry = await api('telemetry'); } catch { telemetry = {}; }
     try { results = await api('results'); suites = await api('suites'); } catch { results = []; suites = {}; }
     try {
@@ -996,7 +1018,37 @@ async function openLogs(id) {
   logJob = id; $('#log-title').textContent = 'Worker logs · ' + id.slice(0, 10);
   await pullLogs();
   if (!$('#logs').open) $('#logs').showModal();
-  clearInterval(logTimer); logTimer = setInterval(() => { if ($('#log-follow').checked) pullLogs(); }, 2000);
+  clearInterval(logTimer); stopLogStream();
+  const poll = () => { logTimer = setInterval(() => { if ($('#log-follow').checked) pullLogs(); }, 2000); };
+  if (demo) return poll();
+  (async () => {      // live stream; reconnect when the server's frame limit ends it, poll if streaming is unavailable
+    for (;;) {
+      const r = await streamLogs(id);
+      if (logJob !== id || r === 'end') return;
+      if (r === 'error') return poll();
+    }
+  })();
+}
+let logAbort = null;
+function stopLogStream() { if (logAbort) logAbort.abort(); logAbort = null; }
+async function streamLogs(id) {
+  const ac = logAbort = new AbortController();
+  try {
+    const after = logLines.length ? logLines[logLines.length - 1].seq : 0;
+    const r = await fetch('/api/logs/' + encodeURIComponent(id) + '/stream?after=' + after, {headers: {Authorization: 'Bearer ' + token}, signal: ac.signal});
+    if (!r.ok || !r.body) return 'error';
+    const reader = r.body.getReader(), dec = new TextDecoder(); let buf = '';
+    for (;;) {
+      const {value, done} = await reader.read(); if (done) return 'closed';
+      buf += dec.decode(value, {stream: true});
+      let i;
+      while ((i = buf.indexOf('\n\n')) >= 0) {
+        const frame = buf.slice(0, i); buf = buf.slice(i + 2);
+        if (frame.startsWith('event: end')) return 'end';
+        if (frame.startsWith('data: ')) { logLines = logLines.concat(JSON.parse(frame.slice(6))); if ($('#log-follow').checked) drawLogs(); }
+      }
+    }
+  } catch (e) { return ac.signal.aborted ? 'end' : 'error'; }
 }
 function download(name, text, mime) {
   const a = document.createElement('a');
@@ -1063,6 +1115,8 @@ $('#open-guide').onclick = () => select('guide');
 $('#demo-start').onclick = startDemo; $('#demo-exit').onclick = stopDemo;
 $('#pause').onclick = togglePause; $('#refresh').onclick = refresh;
 $('#palette-open').onclick = openPalette;
+for (const id of ['#node-filter', '#model-filter', '#dataset-filter', '#event-filter']) $(id).oninput = () => state && render();
+$('#job-sort').onchange = () => state && render();
 $('#filter').oninput = () => state && render(); $('#state-filter').onchange = () => state && render();
 $$('nav button').forEach(e => e.onclick = () => select(e.dataset.view));
 $('#export-csv').onclick = () => state && exportJobs('csv'); $('#export-json').onclick = () => state && exportJobs('json');
@@ -1131,7 +1185,7 @@ document.addEventListener('click', async e => {
   } catch (err) { fail(err); }
 });
 $('#close-logs').onclick = () => $('#logs').close();
-$('#logs').addEventListener('close', () => { clearInterval(logTimer); logJob = null; });
+$('#logs').addEventListener('close', () => { clearInterval(logTimer); stopLogStream(); logJob = null; });
 $('#drawer-close').onclick = () => $('#drawer').close(); $('#help-close').onclick = () => $('#help').close();
 $('#log-search').oninput = drawLogs; $('#log-wrap').onchange = drawLogs;
 $('#log-copy').onclick = async () => { try { await navigator.clipboard.writeText(logLines.map(l => l.text).join('\n')); toast('Logs copied'); } catch { toast('Copy blocked by the browser', 'error'); } };
@@ -1146,6 +1200,12 @@ $('#set-theme').onchange = e => { prefs.theme = e.target.value; savePrefs(); };
 $('#set-window').onchange = e => { prefs.window = e.target.value; savePrefs(); };
 $('#set-interval').onchange = e => { prefs.interval = Number(e.target.value); savePrefs(); };
 $('#set-reduce').onchange = e => { prefs.reduce = e.target.checked; savePrefs(); };
+$('#set-notify').onchange = async e => {
+  if (e.target.checked && typeof Notification !== 'undefined' && Notification.permission === 'default') { try { await Notification.requestPermission(); } catch {} }
+  prefs.notify = e.target.checked && notifyAllowed();
+  $('#notify-note').textContent = e.target.checked && !prefs.notify ? '(blocked by the browser; allow notifications for this site)' : '';
+  savePrefs();
+};
 document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); return openPalette(); }
   if (e.target.closest && e.target.closest('input,textarea,select') || e.metaKey || e.ctrlKey || e.altKey) return;

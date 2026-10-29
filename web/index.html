@@ -169,7 +169,7 @@ gryvia.py drain MAC_ID               # stop new work on a Mac</pre>
     <section class="panel"><h3>Recent workloads</h3><div id="recent"></div></section>
   </section>
 
-  <section id="fleet" class="view hidden"><div class="section-head"><h2>Mac fleet</h2><span>Drain nodes safely before maintenance</span></div><section id="add-mac" class="panel"><h3>Add a Mac</h3>
+  <section id="fleet" class="view hidden"><div class="section-head"><h2>Mac fleet</h2><div class="toolbar"><input id="node-filter" placeholder="Filter Macs" aria-label="Filter Macs"><span>Drain nodes safely before maintenance</span></div></div><section id="add-mac" class="panel"><h3>Add a Mac</h3>
       <p class="muted">Create a single-use code, then run the command on the new Mac. The code expires in 15 minutes and is shown only once.</p>
       <div class="actions"><button id="join-create" class="primary">Create join code</button></div>
       <div id="join-result" aria-live="polite"></div><div id="join-list"></div></section>
@@ -180,6 +180,7 @@ gryvia.py drain MAC_ID               # stop new work on a Mac</pre>
       <div class="toolbar">
         <input id="filter" placeholder="Filter model, tenant, state, label" aria-label="Filter workloads">
         <select id="state-filter" aria-label="State"><option value="">All states</option><option>queued</option><option>running</option><option>succeeded</option><option>failed</option><option>cancelled</option></select>
+        <select id="job-sort" aria-label="Sort workloads"><option value="">Newest first</option><option value="priority">Priority</option><option value="memory">Memory</option><option value="state">State</option></select>
         <button id="run-demo-2" type="button" class="primary">Run demo job</button><button id="export-csv" type="button">CSV</button><button id="export-json" type="button">JSON</button>
       </div>
     </div>
@@ -208,7 +209,7 @@ gryvia.py drain MAC_ID               # stop new work on a Mac</pre>
 
   <section id="models" class="view hidden">
     <div class="section-head"><h2>Model hub</h2>
-      <div class="toolbar"><button id="compare" type="button" disabled>Compare selected</button><button id="onboard-open" type="button" class="primary">Onboard a model</button></div>
+      <div class="toolbar"><input id="model-filter" placeholder="Filter models" aria-label="Filter models"><button id="compare" type="button" disabled>Compare selected</button><button id="onboard-open" type="button" class="primary">Onboard a model</button></div>
     </div>
     <p>Bring a model onto your Macs, check it fits, benchmark it, and test it against your own prompts.</p>
     <div id="model-list" class="node-grid"></div>
@@ -236,7 +237,7 @@ gryvia.py drain MAC_ID               # stop new work on a Mac</pre>
   </section>
 
   <section id="datasets" class="view hidden">
-    <div class="section-head"><h2>Datasets</h2></div>
+    <div class="section-head"><h2>Datasets</h2><div class="toolbar"><input id="dataset-filter" placeholder="Filter datasets" aria-label="Filter datasets"></div></div>
     <p>Data you train and evaluate with. Files live on a Mac under its managed models folder; Gryvia records the size, row count and SHA-256.</p>
     <section class="panel"><div id="dataset-list"></div></section>
     <section class="panel"><h3>Add from Hugging Face</h3>
@@ -327,7 +328,7 @@ gryvia.py drain MAC_ID               # stop new work on a Mac</pre>
       <button class="primary">Save policy</button></form></section></section>
 
   <section id="alerts" class="view hidden"><h2>Alerts</h2><section class="panel" id="alert-list"></section></section>
-  <section id="audit" class="view hidden"><h2>Activity trail</h2><section class="panel" id="events"></section></section>
+  <section id="audit" class="view hidden"><div class="section-head"><h2>Activity trail</h2><div class="toolbar"><input id="event-filter" placeholder="Filter activity" aria-label="Filter activity"></div></div><section class="panel" id="events"></section></section>
 
   <section id="settings" class="view hidden"><h2>Settings</h2>
     <section class="panel"><h3>Appearance</h3>
@@ -338,6 +339,7 @@ gryvia.py drain MAC_ID               # stop new work on a Mac</pre>
       </div>
       <h3 class="gap">Accent</h3><div id="accents" class="swatches" role="radiogroup" aria-label="Accent colour"></div>
       <label class="remember gap"><input type="checkbox" id="set-reduce"> Reduce transparency</label>
+      <label class="remember gap"><input type="checkbox" id="set-notify"> Notify me when a workload finishes or fails, or a Mac goes offline <small id="notify-note" class="muted"></small></label>
     </section>
     <section class="panel"><h3>About</h3>
       <p><strong>Gryvia Apple</strong> 0.4.3 · native Apple Silicon workload scheduling.</p>

@@ -102,6 +102,25 @@ class API(BaseHTTPRequestHandler):
                 if self.server.stopping.wait(interval): break
         except (BrokenPipeError,ConnectionResetError,OSError): pass
         self.close_connection=True
+    def log_stream(self,store,ident,after=0,interval=1.0,limit=900):
+        """Server-Sent Events of new log rows after sequence `after`; ends with `event: end` once the job is finished and drained."""
+        self.send_response(200); self.send_header('Content-Type','text/event-stream'); self.send_header('Cache-Control','no-store')
+        self.send_header('X-Accel-Buffering','no'); self.end_headers()
+        try:
+            for i in range(limit):
+                if self.server.stopping.is_set(): break
+                with store.lock:
+                    rows=[dict(r) for r in store.db.execute('SELECT * FROM logs WHERE job=? AND seq>? ORDER BY seq LIMIT 500',(ident,after))]
+                    st=store.db.execute('SELECT state FROM jobs WHERE id=?',(ident,)).fetchone()
+                if rows:
+                    after=rows[-1]['seq']; self.wfile.write(b'data: '+json.dumps(rows).encode()+b'\n\n')
+                elif not st or st['state'] in ('succeeded','failed','cancelled'):
+                    self.wfile.write(b'event: end\ndata: {}\n\n'); self.wfile.flush(); break
+                else: self.wfile.write(b': keepalive\n\n')
+                self.wfile.flush()
+                if self.server.stopping.wait(interval): break
+        except (BrokenPipeError,ConnectionResetError,OSError): pass
+        self.close_connection=True
     def do_GET(self): self.handle_request(False)
     def do_POST(self): self.handle_request(True)
     def handle_request(self,write):
@@ -194,6 +213,14 @@ class API(BaseHTTPRequestHandler):
                 except ValueError: raise Problem('seconds must be a number')
                 if not 0<=idle<=IDLE_MAX_SECONDS: raise Problem('seconds must be 0..%d'%IDLE_MAX_SECONDS)
                 return self.send(200,store.idle_deployments(idle))
+            if not write and path.startswith('/api/logs/') and path.endswith('/stream'):
+                if role=='agent': raise Problem('forbidden',403)
+                from urllib.parse import parse_qs
+                ident=path.split('/')[3]
+                if not any(j['id']==ident for j in store.snapshot(actor.get('tenant') if role=='tenant' else None)['jobs']): raise Problem('not found',404)
+                raw=parse_qs(urlsplit(self.path).query).get('after',['0'])[0]
+                if not raw.isdigit(): raise Problem('after must be a non-negative integer')
+                return self.log_stream(store,ident,int(raw))
             if not write and path.startswith('/api/logs/'):
                 if role=='agent': raise Problem('forbidden',403)
                 ident=path.split('/')[-1]; state=store.snapshot(actor.get('tenant') if role=='tenant' else None)

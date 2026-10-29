@@ -18,17 +18,18 @@ await page.click('#join-create');await page.waitForSelector('#join-result strong
 if(await page.evaluate(()=>JSON.stringify(localStorage)).then(v=>v.includes('-')&&v.includes(code)))throw Error('join code leaked into localStorage');
 await page.click('[data-drain="mini-01"]');await page.waitForFunction(()=>document.querySelector('[data-drain="mini-01"]').textContent.includes('Resume'));
 await page.click('[data-view="jobs"]');await page.fill('#submit input[name="model"]','Browser submitted job');await page.fill('#submit input[name="memoryGiB"]','2');await page.click('#submit button');await page.waitForFunction(()=>document.querySelector('#job-table').textContent.includes('Browser submitted job'));
-await page.click('#job-table [data-logs]');await page.waitForSelector('dialog[open]');await page.click('#close-logs');
-await page.fill('#filter','Browser submitted job');if(await page.locator('#job-table tbody tr').count()!==1)throw Error('filter failed');
+let streamed=false;page.on('request',r=>{if(r.url().includes('/stream?after='))streamed=true});await page.click('#job-table [data-logs]');await page.waitForSelector('dialog[open]');await page.waitForTimeout(1500);if(!streamed)throw Error('log stream endpoint was not used');await page.click('#close-logs');
+await page.selectOption('#job-sort','memory');await page.selectOption('#job-sort','priority');await page.selectOption('#job-sort','');await page.fill('#filter','Browser submitted job');if(await page.locator('#job-table tbody tr').count()!==1)throw Error('filter failed');
 await page.click('#job-table [data-cancel]');await page.waitForFunction(()=>document.querySelector('#job-table').textContent.includes('cancelled'));
-await page.click('[data-view="models"]');await page.waitForSelector('#model-list [data-model="tiny-q4"]');
+await page.click('[data-view="models"]');await page.waitForSelector('#model-list [data-model="tiny-q4"]');await page.fill('#model-filter','zzz-no-such-model');if(await page.locator('#model-list [data-model]').count()!==0)throw Error('model filter');await page.fill('#model-filter','tiny');await page.waitForSelector('#model-list [data-model="tiny-q4"]');await page.fill('#model-filter','');
+
 await page.click('#onboard-open');await page.waitForSelector('#onboard[open]');await page.fill('#onboard-form [name="paramsB"]','8');await page.fill('#onboard-form [name="quant"]','Q4_K_M');
 if(!(await page.inputValue('#onboard-estimate')).includes('GiB'))throw Error('estimate missing');
 await page.fill('#onboard-form [name="id"]','new-model');await page.fill('#onboard-form [name="repo"]','owner/repo');await page.fill('#onboard-form [name="file"]','m.gguf');
 await page.click('#onboard-form button.primary');await page.waitForSelector('#logs[open]');await page.click('#close-logs');
 await page.click('[data-view="models"]');await page.click('[data-model="tiny-q4"]');await page.waitForSelector('#modeldlg[open]');await page.click('#m-bench');
 await page.fill('#filter','tiny-q4');await page.waitForFunction(()=>document.querySelector('#job-table')&&document.querySelector('#job-table').textContent.includes('benchmark tiny-q4'));await page.fill('#filter','');
-await page.click('[data-view="datasets"]');await page.waitForSelector('#dataset-list td');if(!(await page.textContent('#dataset-list')).includes('toy'))throw Error('dataset missing');
+await page.click('[data-view="datasets"]');await page.fill('#dataset-filter','zzz');if((await page.textContent('#dataset-list')).includes('toy'))throw Error('dataset filter');await page.fill('#dataset-filter','');await page.waitForSelector('#dataset-list td');if(!(await page.textContent('#dataset-list')).includes('toy'))throw Error('dataset missing');
 await page.click('[data-view="training"]');await page.fill('#train-form [name="base"]','mlx-community/tiny-test');await page.fill('#train-form [name="iters"]','10');await page.click('#train-form button.primary');
 await page.waitForSelector('#train-chart-panel:not([hidden])');await page.waitForFunction(()=>document.querySelector('#train-runs').textContent.includes('mlx-community'));
 // sweep: 2 learning rates x 2 layer counts = 4 queued runs, estimate and ranking table
