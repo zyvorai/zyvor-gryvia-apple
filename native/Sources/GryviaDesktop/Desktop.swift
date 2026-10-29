@@ -373,6 +373,7 @@ struct LiveView: View {
 
 struct ModelHubView: View {
     @Bindable var fleet: Fleet
+    var filter = ""
     @State private var showOnboard = false
 
     private func latest(_ id: String, _ kind: String) -> ResultBody? {
@@ -385,20 +386,22 @@ struct ModelHubView: View {
     }
 
     var body: some View {
-        let models = fleet.state?.models ?? []
+        let all = fleet.state?.models ?? []
+        let models = all.filter { m in filter.isEmpty || [m.id, m.runtime, m.status, m.source, m.quant].compactMap { $0 }.contains { $0.localizedCaseInsensitiveContains(filter) } }
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 let best = fleet.results.filter { $0.kind == "benchmark" && $0.body.success == true }.compactMap(\.body.generationTokensPerSecond).max()
                 HStack(alignment: .top) {
-                    HeroHeader(eyebrow: "Model hub", figure: best.map { String(format: "%.0f", $0) } ?? "\(models.filter(\.isReady).count)",
+                    HeroHeader(eyebrow: "Model hub", figure: best.map { String(format: "%.0f", $0) } ?? "\(all.filter(\.isReady).count)",
                                unit: best == nil ? "ready" : "tok/s best generation",
                                sentence: best == nil ? "Bring a model onto your Macs, check it fits, benchmark it, and test it." : "Fastest measured generation across your benchmarked models.",
-                               chips: [("\(models.filter(\.isReady).count)", "ready"), ("\(models.filter { !($0.endpoints ?? []).isEmpty }.count)", "serving")])
+                               chips: [("\(all.filter(\.isReady).count)", "ready"), ("\(all.filter { !($0.endpoints ?? []).isEmpty }.count)", "serving")])
                     Button("Onboard a model", systemImage: "arrow.down.circle") { showOnboard = true }.buttonStyle(.borderedProminent)
                 }
-                if models.isEmpty {
+                if all.isEmpty {
                     TeachingEmpty(symbol: "cube", title: "No models yet", what: "A model is a file a Mac can run, like a GGUF or an MLX folder. Onboarding downloads one, checks its checksum and reserves nothing until you deploy it.", next: "Press “Onboard a model”")
                 }
+                if !all.isEmpty && models.isEmpty { Text("No models match “\(filter)”.").font(.callout).foregroundStyle(.secondary).padding(.top, 8) }
                 ForEach(models) { m in
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
@@ -782,7 +785,7 @@ struct ContentView: View {
                 ToolbarItem { Button("Command palette", systemImage: "command") { showPalette = true }.keyboardShortcut("k", modifiers: .command).help("Command palette (⌘K)") }
             }
             .background { AmbientBackground() }
-            .searchable(text: $filter, prompt: "Filter jobs, nodes, tenants")
+            .searchable(text: $filter, prompt: "Filter jobs, Macs, models, tenants")
         }
         .frame(minWidth: 960, minHeight: 640)
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
@@ -833,7 +836,7 @@ struct ContentView: View {
         case .alerts: alertList
         case .guide: GuideView(fleet: fleet)
         case .live: LiveView(fleet: fleet)
-        case .models: ModelHubView(fleet: fleet)
+        case .models: ModelHubView(fleet: fleet, filter: filter)
         case .training: TrainingView(fleet: fleet)
         case .deployments: DeploymentsView(fleet: fleet)
         }
@@ -924,19 +927,20 @@ struct ContentView: View {
                 if nodes.isEmpty { TeachingEmpty(symbol: "desktopcomputer", title: "No Macs yet", what: "A Mac joins the fleet by running the Gryvia agent. It reports its GPU, memory and thermal state, and takes jobs that fit.", next: "Press Add a Mac, or run `make run-agent` on this Mac") }
                 ForEach(nodes) { n in
                     HStack(spacing: 14) {
-                        Image(systemName: "desktopcomputer").font(.title2).foregroundStyle(n.online ? .green : .secondary).frame(width: 32)
+                        Image(systemName: "desktopcomputer").font(.title2).foregroundStyle(n.online ? .green : .secondary).frame(width: 32).accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 5) {
                             Text(n.id).font(.headline)
                             Text([n.gpuModel, n.gpuCores.map { "\($0) GPU cores" }, n.totalGiB.map { String(format: "%.0f GiB unified memory", $0) }].compactMap { $0 }.joined(separator: " · "))
                                 .font(.caption).foregroundStyle(.secondary)
+                            let held = (fleet.state?.jobs ?? []).filter { $0.node == n.id && ["running", "cancelling"].contains($0.state) }
                             HStack(spacing: 6) {
-                                let held = (fleet.state?.jobs ?? []).filter { $0.node == n.id && ["running", "cancelling"].contains($0.state) }
                                 Chip(text: nodeRole(n, held).capitalized, color: n.online ? .accentColor : .secondary)
                                 Chip(text: String(format: "%.1f / %.0f GiB reserved", held.reduce(0) { $0 + $1.spec.memoryGiB }, n.budgetGiB), color: .accentColor)
                                 ForEach(n.runtimes, id: \.self) { Chip(text: $0) }
                                 if let t = n.thermal { Chip(text: "thermal " + t, color: ["serious", "critical"].contains(t) ? .red : .green) }
                                 if let g = n.gate, !g.allowed { Chip(text: g.reason, color: .orange) }
                             }
+                            CapacityBar(reserved: held.reduce(0) { $0 + $1.spec.memoryGiB }, budget: n.budgetGiB, inUseGiB: n.gpuInUseMiB.map { $0 / 1024 }, label: "\(n.id) memory")
                         }
                         Spacer()
                         Picker("Work", selection: Binding(get: { n.policy?.mode ?? "always" }, set: { m in Task { await fleet.setPolicy(node: n, mode: m) } })) {
