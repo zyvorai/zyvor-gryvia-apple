@@ -6,7 +6,7 @@ grants: a **Personal** plan for one individual and **business and commercial** p
 ## Personal plan
 
 Personal means one individual, for no business, employer or income-producing purpose. It is a one-time payment of
-₹420 including GST (about US$4.99), covers that individual's own Macs, and is the lowest-priced plan. It does not
+₹4,299 including GST (about US$50), covers that individual's own Macs, and is the lowest-priced plan. It does not
 cover business use; use a plan below for that.
 
 ## The business grant
@@ -23,7 +23,7 @@ non-exclusive, non-transferable licence to:
 
 | Plan | Price | Covers |
 |---|---|---|
-| Personal | ₹420 one-time (about US$4.99) | One individual, no business use |
+| Personal | ₹4,299 one-time (about US$50) | One individual, no business use |
 | Solo / small team | ₹4,999 per year (about US$59) | One legal entity, up to 5 Macs |
 | Team | ₹19,999 per year (about US$239) | One legal entity, up to 25 Macs |
 | Larger fleets | by quote | More than 25 Macs or several entities: sales@zyvor.dev |
@@ -49,7 +49,7 @@ Payment is by invoice. *[Licensor and counsel to confirm: the grant text above s
 ## Open questions for counsel
 
 - `LICENSE` now has no free personal-use grant for versions after v0.4.0, while v0.4.0 and earlier keep the grant they were published under (it cannot be withdrawn). Counsel to confirm the wording, in particular that BUSL 1.1 still lets anyone copy, modify and make **non-production** use of the source without paying, and how "production" is told apart from personal evaluation.
-- Whether the ₹420 one-time grant sold earlier stays perpetual for those payers, and how the annual plans relate to it.
+- Whether the ₹420 and ₹4,299 one-time grants sold earlier stays perpetual for those payers, and how the annual plans relate to it.
 - Whether the Mac-count limits (5 and 25) are the right lines, and how "a Mac" is counted for machines that are rebuilt or shared.
 - The exact line between personal and business use for freelancers and employees using Gryvia Apple at work.
 - Transferability on a company sale, and what happens to prior payers if terms change.

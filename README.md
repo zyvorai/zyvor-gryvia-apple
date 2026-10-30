@@ -89,9 +89,9 @@ Enrol another Mac with `make deploy MINI=your-mac` (syncs, builds, tests and ins
 
 | Plan | Price (GST invoice included) | For |
 |---|---|---|
-| **Personal** | ₹420 one-time (about US$4.99), [buy](https://rzp.io/rzp/7A92MBZr) | one person, no business use |
-| **Solo / small team** | ₹4,999 per year (about US$59) | business use, up to 5 Macs |
-| **Team** | ₹19,999 per year (about US$239) | business use, up to 25 Macs |
+| **Personal** | ₹4,299 one-time (about US$50), [buy](https://payments.cashfree.com/forms/zyvor-gryvia-apple) | one person, no business use |
+| **Solo / small team** | ₹4,999 per year (about US$59), [buy](https://payments.cashfree.com/forms/zyvor-gryvia-solo) | business use, up to 5 Macs |
+| **Team** | ₹19,999 per year (about US$239), [buy](https://payments.cashfree.com/forms/zyvor-gryvia-team) | business use, up to 25 Macs |
 | **Larger fleets** | by quote: sales@zyvor.dev | more than 25 Macs or several entities |
 
 Same Developer ID signed and notarized build for every plan; no redistribution or resale. Terms: [docs/COMMERCIAL-LICENSE.md](docs/COMMERCIAL-LICENSE.md) (draft).
