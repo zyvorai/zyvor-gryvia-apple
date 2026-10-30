@@ -33,7 +33,7 @@ for (const [name, size, scheme] of [['desktop-light', { width: 1440, height: 900
   if (!/scheduled/i.test(h1)) problems.push(`${name}: hero headline missing`);
   if (name === 'desktop-light') {
     const body = await page.textContent('body');
-    for (const price of ['₹420', '₹4,999', '₹19,999']) if (!body.includes(price)) problems.push(`plan price text missing: ${price}`);
+    for (const price of ['₹4,299', '₹4,999', '₹19,999']) if (!body.includes(price)) problems.push(`plan price text missing: ${price}`);
     const buy = await page.getAttribute('a:has-text("Buy Personal")', 'href');
     if (!buy || !/^https:\/\//.test(buy)) problems.push(`buy link missing or not https: ${buy}`);
     const invoice = await page.getAttribute('a:has-text("Request an invoice")', 'href');
