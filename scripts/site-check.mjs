@@ -36,8 +36,12 @@ for (const [name, size, scheme] of [['desktop-light', { width: 1440, height: 900
     for (const price of ['₹4,299', '₹4,999', '₹19,999']) if (!body.includes(price)) problems.push(`plan price text missing: ${price}`);
     const buy = await page.getAttribute('a:has-text("Buy Personal")', 'href');
     if (!buy || !/^https:\/\//.test(buy)) problems.push(`buy link missing or not https: ${buy}`);
-    const invoice = await page.getAttribute('a:has-text("Request an invoice")', 'href');
-    if (!invoice || !/^mailto:sales@zyvor\.dev/.test(invoice)) problems.push(`invoice link missing or wrong: ${invoice}`);
+    for (const plan of ['Buy Solo', 'Buy Team']) {
+      const href = await page.getAttribute(`a:has-text("${plan}")`, 'href');
+      if (!href || !/^https:\/\/payments\.cashfree\.com\//.test(href)) problems.push(`${plan} link missing or wrong: ${href}`);
+    }
+    const sales = await page.getAttribute('a:has-text("sales@zyvor.dev")', 'href');
+    if (!sales || !/^mailto:sales@zyvor\.dev/.test(sales)) problems.push(`sales link missing or wrong: ${sales}`);
   }
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
   if (overflow) problems.push(`${name}: horizontal scroll`);
