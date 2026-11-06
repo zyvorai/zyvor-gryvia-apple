@@ -5,69 +5,130 @@ import SwiftUI
 import AppKit
 import GryviaCore
 
+/// User-facing appearance keys stored in AppStorage / UserDefaults (never the access token).
+enum AppearancePrefs {
+    static let appearanceKey = "appearance"       // auto | light | dark
+    static let windowStyleKey = "windowStyle"     // macos27 | glass
+    static let reduceTransparencyKey = "reduceTransparency"
+    static let accentKey = "accent"
+
+    static var appearance: String { UserDefaults.standard.string(forKey: appearanceKey) ?? "auto" }
+    static var windowStyle: String { UserDefaults.standard.string(forKey: windowStyleKey) ?? "macos27" }
+    static var reduceTransparency: Bool {
+        if UserDefaults.standard.object(forKey: reduceTransparencyKey) as? Bool == true { return true }
+        return NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
+    }
+    static var accentName: String { UserDefaults.standard.string(forKey: accentKey) ?? "blue" }
+    static var accentHex: UInt32 {
+        Brand.accents.first { $0.name == accentName }?.hex ?? Brand.accentHex
+    }
+    static var colorScheme: ColorScheme? {
+        switch appearance {
+        case "light": return .light
+        case "dark": return .dark
+        default: return nil
+        }
+    }
+}
+
 /// One window chrome for the app and the snapshots: transparent title bar so the page background runs edge to edge.
 enum WindowStyle {
     @MainActor static func apply(_ w: NSWindow) {
         w.titlebarAppearsTransparent = true
         w.styleMask.insert(.fullSizeContentView)
-        w.backgroundColor = NSColor(name: nil) { $0.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .black : .windowBackgroundColor }
+        let dark = w.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let glass = AppearancePrefs.windowStyle == "glass" && !AppearancePrefs.reduceTransparency
+        if dark {
+            w.backgroundColor = glass ? NSColor.black.withAlphaComponent(0.92) : .black
+        } else {
+            w.backgroundColor = glass ? NSColor.windowBackgroundColor.withAlphaComponent(0.92) : .windowBackgroundColor
+        }
     }
 }
 
 extension WindowStyle {
-    /// SwiftUI gives the sidebar and title bar a system vibrancy layer that cannot be turned off from SwiftUI on macOS. In dark
-    /// it shows as a grey slab beside the black page, so mask those layers and let the window background (black) through.
+    /// SwiftUI gives the sidebar and title bar a system vibrancy layer that cannot be turned off from SwiftUI on macOS. In
+    /// `macos27` (opaque) dark mode it shows as a grey slab beside the black page, so mask those layers. `glass` keeps blur.
     @MainActor static func flatten(_ w: NSWindow) {
+        guard AppearancePrefs.windowStyle != "glass" || AppearancePrefs.reduceTransparency else { return }
         guard w.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua, let root = w.contentView?.superview else { return }
         func walk(_ v: NSView) {
-            if let fx = v as? NSVisualEffectView { fx.maskImage = NSImage(size: NSSize(width: 1, height: 1)) }   // masks the material only, not the content on top
+            if let fx = v as? NSVisualEffectView { fx.maskImage = NSImage(size: NSSize(width: 1, height: 1)) }
             v.subviews.forEach(walk)
         }
         walk(root)
     }
     /// The views appear a moment after the window; flatten again as the layout settles.
     @MainActor static func flattenLater(_ w: NSWindow) {
-        for delay in [0.2, 0.6, 1.5] { DispatchQueue.main.asyncAfter(deadline: .now() + delay) { flatten(w) } }
+        for delay in [0.2, 0.6, 1.5] { DispatchQueue.main.asyncAfter(deadline: .now() + delay) { apply(w); flatten(w) } }
     }
 }
 
-/// Adaptive colours. Dark follows the Zyvor product look: true black, translucent glass cards, a faint blue bloom.
+/// Adaptive colours. Dark: true black + glass cards + accent bloom. Light: soft paper + matching accent bloom.
 enum Theme {
     private static func dynamic(dark: NSColor, light: NSColor) -> Color {
         Color(nsColor: NSColor(name: nil) { $0.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light })
     }
-    static let surface = dynamic(dark: NSColor(white: 1, alpha: 0.055), light: .controlBackgroundColor)
-    static let hairline = dynamic(dark: NSColor(white: 1, alpha: 0.11), light: NSColor.separatorColor)
-    static let accent = Color(hex: Brand.accentHex)
-    /// Bright end of the dark-mode numeral gradient (accent lightened toward white).
-    static let accentGlow = Color(hex: Brand.accentHex).mix(with: .white, by: 0.45)
+    /// Follows the Settings accent (and brand tokens), not a hard-coded blue.
+    static var accent: Color { Color(hex: AppearancePrefs.accentHex) }
+    static var accentGlow: Color { accent.mix(with: .white, by: 0.45) }
+    static var surface: Color {
+        if AppearancePrefs.reduceTransparency {
+            return dynamic(dark: NSColor(white: 0.12, alpha: 1), light: NSColor(white: 0.97, alpha: 1))
+        }
+        return dynamic(dark: NSColor(white: 1, alpha: 0.055), light: NSColor(white: 1, alpha: 0.72))
+    }
+    static let hairline = dynamic(dark: NSColor(white: 1, alpha: 0.11), light: NSColor(white: 0, alpha: 0.08))
 }
 
-/// Page background: plain in light; in dark, black with a blue bloom from the lower left and a softer one top right.
+/// Page background: accent bloom in both schemes (softer in light); opaque when reduce-transparency is on.
 struct AmbientBackground: View {
     @Environment(\.colorScheme) private var scheme
     var body: some View {
-        if scheme == .dark {
-            ZStack {
+        let reduce = AppearancePrefs.reduceTransparency
+        ZStack {
+            if scheme == .dark {
                 Color.black
-                RadialGradient(colors: [Theme.accent.opacity(0.26), .clear], center: .bottomLeading, startRadius: 0, endRadius: 720)
-                RadialGradient(colors: [Theme.accent.opacity(0.13), .clear], center: .topTrailing, startRadius: 0, endRadius: 520)
-            }.ignoresSafeArea()
-        } else {
-            Color(nsColor: .windowBackgroundColor).ignoresSafeArea()
-        }
+                if !reduce {
+                    RadialGradient(colors: [Theme.accent.opacity(0.26), .clear], center: .bottomLeading, startRadius: 0, endRadius: 720)
+                    RadialGradient(colors: [Theme.accent.opacity(0.13), .clear], center: .topTrailing, startRadius: 0, endRadius: 520)
+                }
+            } else {
+                Color(nsColor: NSColor(calibratedWhite: 0.96, alpha: 1))
+                if !reduce {
+                    RadialGradient(colors: [Theme.accent.opacity(0.14), .clear], center: .bottomLeading, startRadius: 0, endRadius: 640)
+                    RadialGradient(colors: [Theme.accent.opacity(0.08), .clear], center: .topTrailing, startRadius: 0, endRadius: 480)
+                }
+            }
+        }.ignoresSafeArea()
     }
 }
 
-/// Large figures: white-to-blue in dark (as on the product site), plain in light.
+/// Large figures: white-to-accent in dark; accent-tinted in light.
 struct GlowText: ViewModifier {
     @Environment(\.colorScheme) private var scheme
     func body(content: Content) -> some View {
-        if scheme == .dark { content.foregroundStyle(LinearGradient(colors: [.white, Theme.accentGlow], startPoint: .leading, endPoint: .trailing)) }
-        else { content }
+        if scheme == .dark {
+            content.foregroundStyle(LinearGradient(colors: [.white, Theme.accentGlow], startPoint: .leading, endPoint: .trailing))
+        } else {
+            content.foregroundStyle(LinearGradient(colors: [Color.primary, Theme.accent], startPoint: .leading, endPoint: .trailing))
+        }
     }
 }
 extension View { func glowText() -> some View { modifier(GlowText()) } }
+
+/// 3px accent focus ring for keyboard users (UX contract).
+struct AccentFocusRing: ViewModifier {
+    @Environment(\.isFocused) private var focused
+    func body(content: Content) -> some View {
+        content.overlay {
+            if focused {
+                RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.accent, lineWidth: 3).padding(-3)
+            }
+        }
+    }
+}
+extension View { func accentFocusRing() -> some View { modifier(AccentFocusRing()) } }
 
 /// Mono, spaced, upper-case label above a title.
 struct Eyebrow: View {
@@ -75,16 +136,16 @@ struct Eyebrow: View {
     var body: some View { Text(text.uppercased()).font(.system(size: 11, weight: .semibold, design: .monospaced)).tracking(1.6).foregroundStyle(Theme.accent) }
 }
 
-/// Card surface shared by the panes: same radius, fill and hairline as the Live and Overview cards.
+/// Card surface shared by the panes: concentric radii — panels 18 by default (contract: window 26 → panels 18 → controls 12 → small 8).
 struct CardSurface: ViewModifier {
-    var radius: CGFloat = 14
+    var radius: CGFloat = 18
     func body(content: Content) -> some View {
         content
             .background(Theme.surface, in: .rect(cornerRadius: radius))
             .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.hairline))
     }
 }
-extension View { func card(radius: CGFloat = 14) -> some View { modifier(CardSurface(radius: radius)) } }
+extension View { func card(radius: CGFloat = 18) -> some View { modifier(CardSurface(radius: radius)) } }
 
 /// Title, one-line explanation and optional trailing summary, used at the top of the list panes.
 struct PaneHeader: View {
