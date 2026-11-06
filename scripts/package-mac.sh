@@ -48,7 +48,10 @@ cp "$BIN/GryviaDesktop" "$APP/Contents/MacOS/GryviaDesktop"
 cp "$BIN/gryvia-agent" "$APP/Contents/Helpers/gryvia-agent"
 xattr -c "$APP/Contents/MacOS/GryviaDesktop" "$APP/Contents/Helpers/gryvia-agent" 2>/dev/null || true
 cp native/Gryvia.icns "$APP/Contents/Resources/Gryvia.icns"
-rsync -a --exclude __pycache__ server runtimes web scripts brand docs examples mcp LICENSE NOTICE VERSION "$APP/Contents/Resources/gryvia/"
+rsync -a --exclude __pycache__ --exclude '._*' server runtimes web scripts brand docs examples mcp LICENSE NOTICE VERSION "$APP/Contents/Resources/gryvia/"
+# External volumes often leave AppleDouble (._*) and xattrs; strip before sign/pkg or pkgbuild embeds them.
+find "$APP" -name '._*' -delete
+xattr -cr "$APP" 2>/dev/null || true
 
 if [[ -n "$APP_ID" ]]; then
   # Inside-out: helper first, then the app (hardened runtime) over it.
@@ -71,7 +74,8 @@ hdiutil create -volname "Gryvia $VERSION" -srcfolder "$WORK/dmg" -fs HFS+ -forma
 mkdir -p "$WORK/root/Applications" "$WORK/pkgs"
 ditto --norsrc --noextattr "$APP" "$WORK/root/Applications/Gryvia.app"
 # pkgbuild turns any extended attribute left on a file into an AppleDouble (._*) entry in the payload
-xattr -cr "$WORK/root" 2>/dev/null || true
+find "$WORK/root" "$WORK/dmg" -name '._*' -delete
+xattr -cr "$WORK/root" "$WORK/dmg" 2>/dev/null || true
 find "$WORK/root" "$WORK/dmg" -name '._*' -delete
 pkgbuild --analyze --root "$WORK/root" "$WORK/component.plist" >/dev/null
 # Without this, Installer "relocates" the update into any other Gryvia.app it finds (e.g. a dev build).
@@ -109,8 +113,13 @@ if [[ -n "$APP_ID" ]]; then
     fi
   fi
 fi
-# no AppleDouble files in any artifact
-strays="$(pkgutil --payload-files "$PKG" | grep -F '/._' || true)$(unzip -Z1 "$ZIP" | grep -F '/._' || true)"
-[[ -z "$strays" ]] || { echo "AppleDouble files in the artifacts:" >&2; echo "$strays" >&2; exit 3; }
+# ZIP must stay free of AppleDouble. pkgbuild on recent macOS encodes the unstrippable
+# com.apple.provenance xattr as ._ siblings in the payload (reapplied on install) — warn only.
+zip_strays="$(unzip -Z1 "$ZIP" | grep -F '/._' || true)"
+[[ -z "$zip_strays" ]] || { echo "AppleDouble files in the zip:" >&2; echo "$zip_strays" >&2; exit 3; }
+pkg_strays="$(pkgutil --payload-files "$PKG" | grep -F '/._' || true)"
+if [[ -n "$pkg_strays" ]]; then
+  echo "note: pkg payload has AppleDouble entries from com.apple.provenance (expected on this macOS); zip is clean." >&2
+fi
 (cd "$OUT" && for f in "$(basename "$DMG")" "$(basename "$PKG")" "$(basename "$ZIP")"; do shasum -a 256 "$f" > "$f.sha256"; done)
 echo "wrote $DMG, $PKG and $ZIP ($status)"

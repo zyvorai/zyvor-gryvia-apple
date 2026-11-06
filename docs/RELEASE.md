@@ -1,5 +1,15 @@
 # Release status and how to cut a release
 
+## v0.5.1 (published 6 November 2026)
+
+https://github.com/zyvorai/zyvor-gryvia-apple/releases/tag/v0.5.1. Mac app polish: Appearance / window style / Reduce transparency Settings, accent-driven theme, Overview capacity and replicas, log Pause/Follow.
+
+- **Verified (MacBook, macOS 27.2):** Swift release build; `scripts/mac-smoke.sh`; `GryviaDesktop --snapshot` light and dark; `Gryvia-0.5.1.dmg` and `.pkg` Developer ID signed, accepted by Apple's notary service and stapled; `stapler validate` and `spctl` report "Notarized Developer ID" for both. ZIP has no AppleDouble files. Checksums in `release/Gryvia-0.5.1.*.sha256` and `SHA256SUMS-0.5.1`.
+- **Not verified:** full `make verify` after the version bump (Python + Swift suite passed earlier on the polish commit before the bump); two physical Macs; live Settings appearance in a long session; Homebrew upgrade on a clean Mac.
+- **How the assets got there:** built locally with `DEVELOPER_ID_APP`, `DEVELOPER_ID_INSTALLER` and `NOTARY_PROFILE=gryvia` via `scripts/package-mac.sh 0.5.1`, then uploaded to the GitHub release. The release workflow Mac job still has no signing secrets (see below).
+- **pkg note:** on this macOS, `pkgbuild` encodes the unstrippable `com.apple.provenance` xattr as AppleDouble siblings in the payload (reapplied on install). The zip stays clean; the packaging script warns instead of failing on those pkg entries.
+- **CI secrets still needed** (so the next tag signs in Actions without clobber uploads): `MACOS_CERTS_P12`, `MACOS_CERTS_PASSWORD`, `DEVELOPER_ID_APP`, `DEVELOPER_ID_INSTALLER`, `NOTARY_KEY_P8`, `NOTARY_KEY_ID`, `NOTARY_ISSUER`.
+
 ## v0.4.0 (published 21 October 2026)
 
 https://github.com/zyvorai/zyvor-gryvia-apple/releases/tag/v0.4.0. Folds in the never-published v0.3.0 work plus opt-in auto idle eviction, multi-replica serving and the Idle deployments panel (PR #23).

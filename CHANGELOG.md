@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v0.5.1 — 2026-11-06
+
+- **Mac app**: Settings for Appearance (Light / Dark / Auto), window style (`macos27` opaque vs `glass`), and Reduce transparency; accent colour drives bloom, eyebrows and focus rings. Light mode gets an ambient accent bloom. Overview shows fleet capacity, idle Macs and serving replica counts. Job logs gain Pause and Follow. Card radii follow the UX contract (panels 18).
+- **Docs**: UX-CONTRACT native parity section matches what shipped in 0.5.0 plus this polish.
+
 ## v0.5.0 — 2026-10-29
 
 Built for a small fleet of 2 to 5 Macs running independent jobs and replicas. Nothing here has been run on two physical Macs (see `docs/RELEASE.md`).

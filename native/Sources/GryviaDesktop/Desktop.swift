@@ -874,10 +874,62 @@ struct ContentView: View {
                     Metric(label: "Queued", value: fleet.queued, symbol: "clock")
                     Metric(label: "Completed", value: fleet.state?.jobs.filter { $0.state == "succeeded" }.count ?? 0, symbol: "checkmark.circle")
                 }
+                overviewCapacity
+                overviewServing
                 Text("Recent workloads").font(.headline)
-                jobRows(Array((fleet.state?.jobs ?? []).prefix(8)))
+                jobRows(Array((fleet.state?.jobs ?? []).prefix(8))).card()
             }.padding(24)
         }
+    }
+
+    /// Fleet memory bookkeeping and idle Macs (admission reservations, not measured GPU use).
+    var overviewCapacity: some View {
+        let nodes = fleet.state?.nodes ?? []
+        let online = nodes.filter(\.online)
+        let budget = online.reduce(0) { $0 + $1.budgetGiB }
+        let reserved = (fleet.state?.jobs ?? []).filter { ["running", "cancelling"].contains($0.state) }.reduce(0) { $0 + $1.spec.memoryGiB }
+        let idle = online.filter { n in
+            !(fleet.state?.jobs ?? []).contains { $0.node == n.id && ["running", "cancelling"].contains($0.state) }
+        }
+        return VStack(alignment: .leading, spacing: 10) {
+            PaneHeader(title: "Capacity", eyebrow: "Fleet", subtitle: "Admission reservations across online Macs. The bar is bookkeeping, not a live GPU meter.",
+                       trailing: String(format: "%.0f / %.0f GiB", reserved, budget))
+            CapacityBar(reserved: reserved, budget: max(budget, 0.001), label: "Fleet memory reserved")
+            HStack(spacing: 8) {
+                Chip(text: "\(idle.count) idle", color: idle.isEmpty ? .secondary : Theme.accent)
+                Chip(text: "\(online.count - idle.count) busy", color: .secondary)
+                Chip(text: "\(nodes.filter(\.drain).count) draining", color: nodes.contains(where: \.drain) ? .orange : .secondary)
+            }
+            if !idle.isEmpty {
+                Text(idle.map(\.id).joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(16).card()
+    }
+
+    /// Serving deployments and replica count (one endpoint per live serve job).
+    var overviewServing: some View {
+        let models = fleet.state?.models ?? []
+        let serving = models.filter { !($0.endpoints ?? []).isEmpty }
+        let endpoints = serving.flatMap { $0.endpoints ?? [] }
+        return VStack(alignment: .leading, spacing: 10) {
+            PaneHeader(title: "Deployments", eyebrow: "Run", subtitle: "Models currently served on the fleet.",
+                       trailing: serving.isEmpty ? "none serving" : "\(serving.count) model\(serving.count == 1 ? "" : "s") · \(endpoints.count) replica\(endpoints.count == 1 ? "" : "s")")
+            if serving.isEmpty {
+                Text("Nothing is serving yet. Deploy a ready model from Deployments or the Model hub.")
+                    .font(.callout).foregroundStyle(.secondary)
+            } else {
+                ForEach(serving) { m in
+                    HStack {
+                        Text(m.id).font(.callout.weight(.semibold))
+                        Spacer()
+                        Chip(text: "\((m.endpoints ?? []).count) replica\((m.endpoints ?? []).count == 1 ? "" : "s")", color: .green)
+                        Text(m.endpoints?.last ?? "").font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
+            }
+        }
+        .padding(16).card()
     }
 
     var overviewHero: some View {
@@ -1104,12 +1156,16 @@ struct JobDetail: View {
     let job: Job
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
+    @State private var paused = false
+    @State private var autoScroll = true
     var shown: [LogLine] { query.isEmpty ? fleet.logs : fleet.logs.filter { $0.text.localizedCaseInsensitiveContains(query) } }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(job.spec.model ?? job.spec.runtime).font(.title2.bold()); StateBadge(state: job.state); Spacer()
-                TextField("Search logs", text: $query).textFieldStyle(.roundedBorder).frame(width: 180)
+                TextField("Search logs", text: $query).textFieldStyle(.roundedBorder).frame(width: 180).accentFocusRing()
+                Toggle("Pause", isOn: $paused).toggleStyle(.button).help("Stop appending new log lines")
+                Toggle("Follow", isOn: $autoScroll).toggleStyle(.button).help("Keep the log scrolled to the latest line")
                 Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(shown.map(\.text).joined(separator: "\n"), forType: .string) }
                 Button("Done") { dismiss() }
             }
@@ -1120,23 +1176,36 @@ struct JobDetail: View {
                     Label(job.state == "queued" ? "Why it is waiting" : "Last scheduler note", systemImage: "info.circle").font(.callout.weight(.semibold))
                     Text(ReasonText.explain(job.reason) ?? job.reason).font(.callout).foregroundStyle(.secondary)
                     if ReasonText.explain(job.reason) != nil { Text("Scheduler said: \(job.reason)").font(.caption.monospaced()).foregroundStyle(.tertiary) }
-                }.frame(maxWidth: .infinity, alignment: .leading).padding(10).card(radius: 10)
+                }.frame(maxWidth: .infinity, alignment: .leading).padding(10).card(radius: 8)
             }
-            ScrollView {
-                Text(shown.isEmpty ? "No log output yet." : shown.map(\.text).joined(separator: "\n"))
-                    .font(.system(.footnote, design: .monospaced)).textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(10)
-            }.card(radius: 10)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    Text(shown.isEmpty ? "No log output yet." : shown.map(\.text).joined(separator: "\n"))
+                        .font(.system(.footnote, design: .monospaced)).textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(10)
+                        .id("log-bottom")
+                }
+                .card(radius: 12)
+                .onChange(of: fleet.logs.count) { _, _ in
+                    if autoScroll && !paused { withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("log-bottom", anchor: .bottom) } }
+                }
+            }
         }
         .padding(20).frame(width: 640, height: 560).background { AmbientBackground() }
         .task {
-            // Stream new lines; if the stream is unavailable or drops, poll as before.
+            // Stream new lines; if the stream is unavailable or drops, poll as before. Pause skips appends.
             fleet.logs = []
             do {
-                for try await rows in try fleet.api().followLogs(job.id) { fleet.logs.append(contentsOf: rows) }
+                for try await rows in try fleet.api().followLogs(job.id) {
+                    if Task.isCancelled { return }
+                    if !paused { fleet.logs.append(contentsOf: rows) }
+                }
                 return
             } catch { if Task.isCancelled { return } }
-            while !Task.isCancelled { await fleet.loadLogs(job.id); try? await Task.sleep(for: .seconds(2)) }
+            while !Task.isCancelled {
+                if !paused { await fleet.loadLogs(job.id) }
+                try? await Task.sleep(for: .seconds(2))
+            }
         }
     }
 }
@@ -1163,15 +1232,37 @@ struct SubmitSheet: View {
 
 struct SettingsView: View {
     @AppStorage("accent") private var accent = "blue"
+    @AppStorage("appearance") private var appearance = "auto"
+    @AppStorage("windowStyle") private var windowStyle = "macos27"
+    @AppStorage("reduceTransparency") private var reduceTransparency = false
     @AppStorage("refreshSeconds") private var refresh = 5
     @AppStorage("notifyJobs") private var notifyJobs = true
     @AppStorage("notifyNodes") private var notifyNodes = false
     @AppStorage("notifyOnlyInBackground") private var notifyBackground = false
+    private func restyleWindows() {
+        for w in NSApplication.shared.windows where w.isVisible {
+            WindowStyle.apply(w)
+            WindowStyle.flattenLater(w)
+        }
+    }
     var body: some View {
         Form {
-            Picker("Accent", selection: $accent) {
-                ForEach(Brand.accents, id: \.name) { a in
-                    Label(a.name.capitalized, systemImage: "circle.fill").foregroundStyle(Color(hex: a.hex)).tag(a.name)
+            Section("Appearance") {
+                Picker("Appearance", selection: $appearance) {
+                    Text("Auto").tag("auto"); Text("Light").tag("light"); Text("Dark").tag("dark")
+                }
+                Picker("Window style", selection: $windowStyle) {
+                    Text("Opaque (macos27)").tag("macos27"); Text("Glass").tag("glass")
+                }
+                .onChange(of: windowStyle) { _, _ in restyleWindows() }
+                Toggle("Reduce transparency", isOn: $reduceTransparency)
+                    .onChange(of: reduceTransparency) { _, _ in restyleWindows() }
+                Text("Glass keeps the sidebar blur. Opaque flattens dark chrome to the black page. Reduce transparency forces solid fills.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Picker("Accent", selection: $accent) {
+                    ForEach(Brand.accents, id: \.name) { a in
+                        Label(a.name.capitalized, systemImage: "circle.fill").foregroundStyle(Color(hex: a.hex)).tag(a.name)
+                    }
                 }
             }
             Picker("Refresh every", selection: $refresh) { ForEach([2, 5, 15, 60], id: \.self) { Text("\($0) s").tag($0) } }
@@ -1183,7 +1274,7 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("About") {
-                Text("Gryvia Apple 0.5.0 · Business Source License 1.1")
+                Text("Gryvia Apple 0.5.1 · Business Source License 1.1")
                 Text("Copyright © 2026 Zyvor AI Labs Private Limited").foregroundStyle(.secondary)
             }
         }.formStyle(.grouped).frame(width: 420).padding()
@@ -1194,11 +1285,28 @@ struct SettingsView: View {
     @State private var fleet = Fleet()
     private let snapshot = DesignSnapshot.options()
     @AppStorage("accent") private var accent = "blue"
+    @AppStorage("appearance") private var appearance = "auto"
+    @AppStorage("windowStyle") private var windowStyle = "macos27"
+    @AppStorage("reduceTransparency") private var reduceTransparency = false
     @AppStorage("refreshSeconds") private var refreshSeconds = 5
+    private var preferredScheme: ColorScheme? {
+        switch appearance {
+        case "light": return .light
+        case "dark": return .dark
+        default: return nil
+        }
+    }
+    private func restyle() {
+        for w in NSApplication.shared.windows where w.isVisible {
+            WindowStyle.apply(w)
+            WindowStyle.flattenLater(w)
+        }
+    }
     var body: some Scene {
         WindowGroup {
             ContentView(fleet: fleet)
                 .tint(Color.accent(named: accent))
+                .preferredColorScheme(preferredScheme)
                 .onAppear {
                     NSApplication.shared.applicationIconImage = ContentView.brandIcon   // Dock tile: do not depend on the LaunchServices icon cache
                     // Started from a terminal (swift run, a bare binary) the app is not frontmost, so keystrokes would go to the terminal.
@@ -1206,6 +1314,10 @@ struct SettingsView: View {
                     NSApplication.shared.activate(ignoringOtherApps: true)
                     if let w = NSApplication.shared.windows.first { WindowStyle.apply(w); w.makeKeyAndOrderFront(nil); WindowStyle.flattenLater(w) }
                 }
+                .onChange(of: appearance) { _, _ in restyle() }
+                .onChange(of: windowStyle) { _, _ in restyle() }
+                .onChange(of: reduceTransparency) { _, _ in restyle() }
+                .onChange(of: accent) { _, _ in restyle() }
                 .task {
                     if let snapshot { await DesignSnapshot.run(snapshot); return }
                     if Fleet.canNotify { _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) }

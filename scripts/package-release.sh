@@ -43,8 +43,9 @@ TXT
 
 sdk="gryvia-sdk-$VERSION"
 mkdir -p "$STAGE/$sdk"
-cp -R native "$STAGE/$sdk/native"
-rm -rf "$STAGE/$sdk/native/.build" "$STAGE/$sdk/native/.swiftpm"
+# Copy sources only — .build can be multi-GB and must never ship.
+mkdir -p "$STAGE/$sdk/native"
+rsync -a --exclude .build --exclude .swiftpm --exclude '._*' native/ "$STAGE/$sdk/native/"
 cp LICENSE NOTICE VERSION "$STAGE/$sdk/"
 
 for name in "$srv" "$sdk"; do
